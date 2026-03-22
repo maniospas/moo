@@ -1,11 +1,9 @@
 # 🐮 moolang 
 
-*There are no configuration files! Only your code and THE MONOLITH.*
-
+*There are no configuration files! Only your code and THE MOO-NOLITH.*
 
 This project was created because monoliths are lightweight. But separation of concerns is also great. Thus you can use *moo*; a 
-tiny build system for packaging components into a monolith. 
-
+tiny build system for packaging components into a monolith (or several monoliths for very large projects). 
 It also allows conditional builds and interaction with the build
 environment.Yet there are no external configuration files; 
 everything is inlined in your code.
@@ -50,9 +48,9 @@ Hi!
 
 The builtin function shown above are:
 -  `command` runs a system
-command and captures its console output. System commands are scheduled as parallel processes, are cached, and execute lazily.
+command and captures its console output. These are scheduled as parallel processes, cached, and execute lazily.
 - `const` declares the rest of the text as a constant value
-- `import` inlines another file. There are also regions to move results to pre-designated place. Useful for declarative languages or HTML applications. For safety, only *.moo* files can currently be imported. 
+- `import` inlines another file. For safety, only *.moo* files can currently be imported. 
 
 
 Now, when built on the linux platform with *python3 moo.py hello.txt.moo* the
@@ -71,9 +69,9 @@ Hello world from a linux file!
 
 *While* moo *is under development, here are some basic concepts.*
 
-**Variables** are immutable and inherited from where your code is included. But you can locally shadow external names. Variables names are independent of the rest of your file.
+**Variables** are immutable and inherited from where your code is included. But you can locally shadow external names. Variable names are independent of the rest of your file.
 
-**Regions** are essentially lists of values that are placed together at specific segments of your code. For example, you may have separate regions for your html style, script, and body. Declare a region like below, and append text to it; it's empty
+**Regions** are essentially lists of values that are placed together at specific segments of your code. For example, you may have separate regions for your html style, script, and body. Declare a region like below, and append text to it. Regions are empty
 by default.
 
 ```c
@@ -91,11 +89,11 @@ Some of available scripts (the list is growing) are:
 - *scripts/b64.py* converts a file to base64 encoding.
 
 
-**Reuse** moo code that is packed it into `const` data like below. The `do` statement works by replacing variables 
-(only variables!) with their expanded version and *then* properly running the result. 
-Under this pattern, the `const` declaration works like a capturing lambda expression as it captures
-all values at the time of its declaration. So, below we get to call the b64 Python script from with an 
-appropriate argument. Imagine that you can declare such helpers at the top level and have them be
+**Reuse** moo code that is packed into `const` data like below. The `do` statement works by replacing variables 
+(only variables!) with their expanded version and *then* properly interpreting the result. 
+Under this pattern, the `const` declaration works like a capturing lambda expression as it resolves
+all its `{}` segments at the time of declaration. So, below we get to call the b64 Python script from with an 
+appropriate argument. UYou can declare such helpers at the top level and have them be
 shared in imported *moo* files.
 
 ```c
