@@ -2,10 +2,13 @@
 
 *There are no configuration files! Only your code and THE MOO-NOLITH.*
 
-This project was created because monoliths are lightweight. But separation of concerns is also great. Thus you can use *moo*; a 
-tiny build system for packaging components into a monolith (or several monoliths for very large projects). 
-It also allows conditional builds and interaction with the build
-environment.Yet there are no external configuration files; 
+This project was created because monoliths are lightweight.
+But separation of concerns is also great. Thus you can use *moo*; a 
+tiny build system for packaging components into a monolith (or several monoliths for very large projects)
+and avoid stuff like tens of API calls for loading a web page or platform-dependent compilation macros. 
+
+*Moo* also allows conditional builds and interaction with the build
+environment. Yet there are no external configuration files that make me feel stuffed; 
 everything is inlined in your code.
 
 **Requirements:** Python 3.11 or later (no virtual environment or dependencies needed)<br>
