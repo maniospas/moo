@@ -1,4 +1,4 @@
-# moolang 
+# 🐮 moolang 
 
 *There are no configuration files! Only your code and THE MONOLITH.*
 
