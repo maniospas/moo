@@ -91,10 +91,12 @@ Some of available scripts (the list is growing) are:
 - *scripts/b64.py* converts a file to base64 encoding.
 
 
-**Reuse** moo code that is packed it into `const` data like below. The expansion consists of replacing variables 
-(only variables!) with their expanded version and *then* calling properly running the result. 
+**Reuse** moo code that is packed it into `const` data like below. The `do` statement works by replacing variables 
+(only variables!) with their expanded version and *then* properly running the result. 
 Under this pattern, the `const` declaration works like a capturing lambda expression as it captures
-all values at the time of its declaration.
+all values at the time of its declaration. So, below we get to call the b64 Python script from with an 
+appropriate argument. Imagine that you can declare such helpers at the top level and have them be
+shared in imported *moo* files.
 
 ```c
 /*** b64 = const command {python} scripts/b64.py***/
