@@ -107,6 +107,7 @@ appropriate argument. UYou can declare such helpers at the top level and have th
 shared in imported *moo* files.
 
 ```c
+/*** append moosafe {python} scripts/
 /*** b64 = const system {python} scripts/b64.py***/
 /*** b64 ***/
 /*** do {b64} examples/file1.txt.moo***/
