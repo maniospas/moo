@@ -15,6 +15,8 @@ everything is inlined in your code.
 **Author:** Emmanouil Krasanakis (maniospas@hotmail.com)<br>
 **License:** Apache 2.0
 
+![examples/example.png](examples/example.png)
+
 ## 🚀 Quickstart
 
 Install Python 3.11 or later and download *moo.py*. You can optionally get some useful *scripts/* too.
