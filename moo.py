@@ -5,15 +5,19 @@ RED, GREEN, CYAN, YELLOW, RESET = "\x1b[31m", "\x1b[32m", "\x1b[36m", "\x1b[33m"
 
 class Region:
     def __init__(self, sep="\n"):
-        self.contents = ""
+        self.contents = list()
         self.sep = sep
     
     def push(self, contents):
-        if self.contents: self.contents += self.sep
-        self.contents += contents
+        self.contents.append(contents)
     
     def __str__(self):
-        return self.contents
+        return "\n".join(self.contents) if self.contents else ""
+
+    def permits(self, value):
+        for contents in self.contents:
+            if value.startswith(contents): return True
+        return False
 
 class Command:
     def __init__(self, expression):
@@ -81,7 +85,7 @@ class Globals:
         self.schedule = list()
 
     def command(self, expression):
-        self.log("command", expression)
+        self.log("  system", expression)
         existing = self.commands.get(expression, None)
         if existing: return existing
         existing = Command(expression)
@@ -164,6 +168,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 returned, pos = parse_block(globs, block, namespace, pos+2, num_tokens)
                 assert pos>=num_tokens-1, "leftover code after namespace ends"
             elif pos<num_tokens-2 and tokens[pos+1]=="=":
+                assert token!="moosafe", "the moosafe region cannot be shadowed because it holds permissions"
                 returned, pos = parse_block(globs, block, context, pos+2, num_tokens)
                 context[token] = returned
                 returned = ""
@@ -176,12 +181,19 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 elif returned!="True": 
                     globs.error("enabled can only be True or False but got: "+returned+"\nDid you forget the {}?", context)
                 returned = ""
+            elif token=="path":
+                returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
+                returned = str(Path(str(returned)).resolve())
             elif token=="eval":
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
                 returned = eval(returned)
                 returned = str(returned)
-            elif token=="command":
+            elif token=="system":
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
+                returned = str(returned)
+                moosafe = context.get_raw_item("moosafe")
+                assert ".." not in returned, ".. cannot be part of commands, as they could escape the safety sandbox: "+returned+"\nPerhaps use the path command to turn relative paths to absolute ones."
+                assert moosafe.permits(returned), "moosafe does not permit command: "+returned+"\nConsider appending its prefix to the moosafe variable. Example: append moosafe {python} to allow python execution"
                 returned = globs.command(returned)
             elif token=="import":
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
@@ -204,6 +216,9 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 while pos<num_tokens-1 and tokens[pos+1].isspace(): 
                     pos += 1
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
+                returned = str(returned)
+                if varname=="moosafe": 
+                    assert not context.parent.parent or var.permits(returned), "the moosafe region can only be edited from the main context but a dependent file tried to append contents that do not already exist: "+returned
                 var.push(returned)
                 returned = ""
             elif token=="region":
@@ -231,7 +246,7 @@ def load_file(globs: Globals, path: str, parent_context: Context=None):
     #    globs.error("for safety, only .moo files can be parsed: "+path, context)
     # found = globs.imported.get(path, None)
     # if found is not None: return found
-    globs.log("import", path)
+    globs.log("  import", path)
     has_started = 0
     block = ""
     new_contents = ""
@@ -263,6 +278,7 @@ def load_file(globs: Globals, path: str, parent_context: Context=None):
 
 
 if __name__ == "__main__":
+    moopath = Path(sys.argv[0]).resolve()
     args = sys.argv[1:]
     globs = Globals(log_enabled=not extract_arg(args, "--silent"))
     stream = extract_arg(args, "--stream")
@@ -285,17 +301,21 @@ if __name__ == "__main__":
 ⢸⣿⣿⣿⣿⡏⠉⠉⣿⣿⣿⣿⣿⠿⠿⠿⠿⢿⣿⣿⣿⣿⣿⠀⠀⠀⠀
 ⠀⢿⣿⣿⣿⠇⠀⠀⠻⣿⣿⣿⠏⠀⠀⠀⠀   ⠿⣿⣿⣿⠇⠀
         """)
+    globs.log("MOO", "- version 0.2", color=GREEN)
     path = args[0]
     system_context = Context("<system>")
     system_context["python"] = sys.executable
     system_context["mooargs"] = str(args)
     system_context["cwd"] = str(Path.cwd().resolve())
+    system_context["moosafe"] = Region()
     processed = load_file(globs, path, system_context)
     if stream:
         print(processed)
         if globs.schedule: globs.error("there are scheduled tasks but these are disabled in --stream mode")
         sys.exit(0)
     dst = Path(path).with_suffix("")
+    if dst.resolve() == moopath:
+        globs.error(str(moopath)+" is forbidden from overwriting itself")
     dst.write_text(processed, encoding="utf-8")
     globs.log("monolith", str(dst), color=GREEN)
     schedule = [globs.command(scheduled) for scheduled in globs.schedule]

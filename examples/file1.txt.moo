@@ -1,5 +1,6 @@
+/*** append moosafe {python}***/
 /*** user = const world***/
-/*** file = import example/file2.{command {python} scripts/os.py}.txt.moo ***/
+/*** file = import examples/file2.{system {python} {path scripts/../scripts/os.py}}.txt.moo ***/
 /*** BODY = region***/
 /*** append BODY {file} ***/
 

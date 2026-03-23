@@ -45,18 +45,18 @@ Assignments do not propagate the value.
 ```c
 // hello.txt.moo
 Hi!
-/*** os = command {python} scripts/os.py ***/
+/*** append moosafe {python} scripts/ ***/
+/*** os = system {python} scripts/os.py ***/
 /*** user = const maniospas ***/
 /*** import hello.{os}.txt.moo ***/
 - Be safe out there.
 ```
 
 The builtin function shown above are:
--  `command` runs a system
-command and captures its console output. These are scheduled as parallel processes, cached, and execute lazily.
+- `append` adds some data to a region variable that holds multiple values. In this case into `moosafe` that determines allowed system command prefixes. More on regions and safety later.
+- `system` runs a system command and captures its console output. These are scheduled as parallel processes, cached, and execute lazily. 
 - `const` declares the rest of the text as a constant value
 - `import` inlines another file. For safety, only *.moo* files can currently be imported. 
-
 
 Now, when built on the linux platform with *python3 moo.py hello.txt.moo* the
 following file is produced by removing the *.in* extension:
@@ -93,6 +93,11 @@ Some of available scripts (the list is growing) are:
 
 - *scripts/b64.py* converts a file to base64 encoding.
 
+**Safety.** In general, use `command` to run specific external commands. The `moosafe` variable determines how the command
+can be prefixed. A common default is `/*** append moosafe {python} scripts/ ***/` to allowing all contents of the *scripts/* folder
+to be called by Python while preventing all other. You can try to append to the safety list from anywhere, but this action will
+be rejected unless the ENTRANT FILE allows a superset of permissions. This is done to achieve safety. Also note that `..` is not allowed
+within commands, as it can escape the safety mechanism. Use path resolution to convert relative paths to absolute ones.
 
 **Reuse** moo code that is packed into `const` data like below. The `do` statement works by replacing variables 
 (only variables!) with their expanded version and *then* properly interpreting the result. 
@@ -102,7 +107,7 @@ appropriate argument. UYou can declare such helpers at the top level and have th
 shared in imported *moo* files.
 
 ```c
-/*** b64 = const command {python} scripts/b64.py***/
+/*** b64 = const system {python} scripts/b64.py***/
 /*** b64 ***/
 /*** do {b64} examples/file1.txt.moo***/
 ```
@@ -110,7 +115,7 @@ shared in imported *moo* files.
 This will create a file like the following (the middle b64 is used to demonstrate the exact command):
 
 ```txt
-command /usr/bin/python3 scripts/b64.py
+system /usr/bin/python3 scripts/b64.py
 LyoqKiB1c2VyID0gY29uc3Qgd29ybGQqKiovCi8qKiogZmlsZSA9IGltcG9ydCBleGFtcGxlL2Zp
 bGUyLntjb21tYW5kIHtweXRob259IHNjcmlwdHMvb3MucHl9LnR4dC5tb28gKioqLwovKioqIEJP
 RFkgPSByZWdpb24qKiovCi8qKiogYXBwZW5kIEJPRFkge2ZpbGV9ICoqKi8KCjxib2R5Pi8qKiog
@@ -133,9 +138,9 @@ Thus, if you run the following per `python3 moo.py src/main.c.moo --compile` it 
 
 ```c
 // src/main.c.moo
+/*** COMPILE: append moosafe gcc ***/
 /*** COMPILE: enabled {eval "--compile" in {mooargs}} ***/
 /*** COMPILE: schedule gcc -Wall -O3 -o lettuce src/main.c ***/
-/*** ext = const .c.moo***/
 
 #include <stdio.h>
 
