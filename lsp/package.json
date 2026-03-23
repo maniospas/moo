@@ -1,0 +1,27 @@
+{
+  "name": "moolang",
+  "displayName": "moolang",
+  "description": "Standard‑theme highlighting for moo /*** … ***/ blocks, usable in every language.",
+  "version": "0.0.33",
+  "engines": { "vscode": "^1.70.0" },
+
+  "contributes": {
+    "languages": [
+      { "id": "any", "aliases": ["any"], "extensions": [] },
+      { "id": "moo", "aliases": ["moo"], "extensions": [".moo"] }
+    ],
+
+    "grammars": [
+      {
+        "language": "any",
+        "scopeName": "comment.block.moo",
+        "path": "./syntaxes/comment.tmLanguage.json"
+      },
+      {
+        "language": "moo",
+        "scopeName": "comment.block.moo",
+        "path": "./syntaxes/comment.tmLanguage.json"
+      }
+    ]
+  }
+}
