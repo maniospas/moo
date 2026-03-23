@@ -114,3 +114,34 @@ bGUyLntjb21tYW5kIHtweXRob259IHNjcmlwdHMvb3MucHl9LnR4dC5tb28gKioqLwovKioqIEJP
 RFkgPSByZWdpb24qKiovCi8qKiogYXBwZW5kIEJPRFkge2ZpbGV9ICoqKi8KCjxib2R5Pi8qKiog
 Qk9EWSAqKiovPC9ib2R5PgoK
 ```
+
+**Namespaces** are also there to compartmenize and enable/disable parts of files.
+To work within a namespace, prefix your instruction with `NAME:`, where *NAME* is its name.
+The following example demonstrates usage of a namespace, alongside a list of final features:
+
+- `enabled` checks for a True or False value and correspondingly disables all future uses of the
+namespace in the file. Do note that namespaces in other files remain unaffected, even if they 
+have the same name. You can *not* re-enable a disabled namespace later.
+- `eval` evaluates a subsequent Python expression
+- `mooargs` is a string representation of additional arguments passed to the script.
+- `schedule` runs a system command after the monolith is created. Scheduled tasks run concurrently.
+
+Thus, if you run the following per `python3 moo.py src/main.c.moo --compile` it will compile the program.
+
+
+```c
+// src/main.c.moo
+/*** COMPILE: enabled {eval "--compile" in {mooargs}} ***/
+/*** COMPILE: schedule gcc -Wall -O3 -o lettuce src/main.c ***/
+/*** ext = const .c.moo***/
+
+#include <stdio.h>
+
+int main() {
+    printf("Hello world!\n");
+    return 0;
+}
+```
+
+
+

@@ -1,7 +1,7 @@
 import sys, base64, subprocess, tempfile, atexit, re
 from pathlib import Path
 from typing import Any, Callable
-RED, GREEN, CYAN, RESET = "\x1b[31m", "\x1b[32m", "\x1b[36m", "\x1b[0m"
+RED, GREEN, CYAN, YELLOW, RESET = "\x1b[31m", "\x1b[32m", "\x1b[36m", "\x1b[33m","\x1b[0m"
 
 class Region:
     def __init__(self, sep="\n"):
@@ -36,12 +36,22 @@ class Context:
         self.row = 0
         self.col = 0
         self.vars = dict()
+        self.namespaces = dict()
+        self.enabled = True
 
     def update(self, row, col):
         self.row = row
         self.col = col
 
-    def __setitem__(self, name, value):
+    def get_namespace(self, name: str):
+        namespace = self.namespaces.get(name, None)
+        if namespace is not None: return namespace
+        namespace = Context(path=self.path+"/"+name, parent=self)
+        namespace.update(self.row, self.col)
+        self.namespaces[name] = namespace
+        return namespace
+
+    def __setitem__(self, name: str, value: str|Region|Command):
         existing = self.vars.get(name, None)
         if existing: 
             assert isinstance(existing, Region), "Can append but not reassign to region: "+name
@@ -51,12 +61,12 @@ class Context:
             return
         self.vars[name] = value
     
-    def get_raw_item(self, name):
+    def get_raw_item(self, name: str):
         existing = self.vars.get(name, None)
         if existing is None and self.parent: return self.parent.get_raw_item(name)
         return existing
 
-    def __getitem__(self, name):
+    def __getitem__(self, name: str):
         existing = self.vars.get(name, None)
         if existing is None and self.parent: return self.parent[name]
         assert existing is not None, "Variable not found: "+name
@@ -68,8 +78,10 @@ class Globals:
         self.commands = dict()
         self.temp_counter = 0
         self.log_enabled = log_enabled
+        self.schedule = list()
 
     def command(self, expression):
+        self.log("command", expression)
         existing = self.commands.get(expression, None)
         if existing: return existing
         existing = Command(expression)
@@ -130,7 +142,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
         if isinstance(block, list): tokens = block
         else:
             block = block.replace("\n", " ").strip()
-            raw_parts = re.split(r'(\s+|=|[{}])', block)
+            raw_parts = re.split(r'(\s+|:|=|[{}])', block)
             tokens = [p for p in raw_parts if p != ""]
         if num_tokens is None: num_tokens = len(tokens)
         assert pos<num_tokens, "empty block"
@@ -144,11 +156,30 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 continue
             while pos<num_tokens-1 and tokens[pos+1].isspace(): 
                 pos += 1
-            if pos<num_tokens-2 and tokens[pos+1]=="=":
+            if pos<num_tokens-2 and tokens[pos+1]==":":
+                namespace = context.get_namespace(token)
+                if not namespace.enabled:
+                    pos = num_tokens
+                    continue
+                returned, pos = parse_block(globs, block, namespace, pos+2, num_tokens)
+                assert pos>=num_tokens-1, "leftover code after namespace ends"
+            elif pos<num_tokens-2 and tokens[pos+1]=="=":
                 returned, pos = parse_block(globs, block, context, pos+2, num_tokens)
                 context[token] = returned
                 returned = ""
                 assert pos>=num_tokens-1, "leftover code after assignment"
+            elif token=="enabled":
+                returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
+                if returned=="False": 
+                    context.enabled = False
+                    globs.log("disabled", context.path, color=YELLOW)
+                elif returned!="True": 
+                    globs.error("enabled can only be True or False but got: "+returned+"\nDid you forget the {}?", context)
+                returned = ""
+            elif token=="eval":
+                returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
+                returned = eval(returned)
+                returned = str(returned)
             elif token=="command":
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
                 returned = globs.command(returned)
@@ -159,6 +190,10 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
             elif token=="pass":
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
+                returned = ""
+            elif token=="schedule":
+                returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
+                globs.schedule.append(str(returned))
                 returned = ""
             elif token=="append":
                 pos += 1
@@ -177,7 +212,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 assert pos>=num_tokens-1, "leftover code after declaring region"
             elif token=="do":
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens, variable_expansion_only=True)
-                new_raw_parts = re.split(r'(\s+|=|[{}])', returned.replace("\n", " ").strip())
+                new_raw_parts = re.split(r'(\s+|:|=|[{}])', returned.replace("\n", " ").strip())
                 new_tokens = [p for p in new_raw_parts if p != ""]+tokens[pos+1:num_tokens]
                 returned, _ = parse_block(globs, new_tokens, context)
             elif token=="{": raise Exception("cannot start a {} block here\nExpecting a function or variable name. Perhaps you meant to preface it with `do`?")
@@ -192,8 +227,8 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
 
 def load_file(globs: Globals, path: str, parent_context: Context=None):
     context = Context(path, parent=parent_context)
-    if not path.endswith(".moo"):
-        globs.error("for safety, only .moo files can be parsed: "+path, context)
+    #if not path.endswith(".moo"):
+    #    globs.error("for safety, only .moo files can be parsed: "+path, context)
     # found = globs.imported.get(path, None)
     # if found is not None: return found
     globs.log("import", path)
@@ -231,8 +266,8 @@ if __name__ == "__main__":
     args = sys.argv[1:]
     globs = Globals(log_enabled=not extract_arg(args, "--silent"))
     stream = extract_arg(args, "--stream")
-    if len(args) != 1:
-        globs.error("missing arguments for: python moo.py [--silent] [--stream] <source>.in")
+    if len(args) < 1:
+        globs.error("missing arguments for: python moo.py [--silent] [--stream] <source>.moo [args]")
     if globs:
         print("""
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣴⣦⡀⠀⠀⠀⠀⠀ ⢀⣤⣶⣄⠀⠀⠀⠀
@@ -253,11 +288,15 @@ if __name__ == "__main__":
     path = args[0]
     system_context = Context("<system>")
     system_context["python"] = sys.executable
+    system_context["mooargs"] = str(args)
     system_context["cwd"] = str(Path.cwd().resolve())
     processed = load_file(globs, path, system_context)
     if stream:
         print(processed)
+        if globs.schedule: globs.error("there are scheduled tasks but these are disabled in --stream mode")
         sys.exit(0)
     dst = Path(path).with_suffix("")
     dst.write_text(processed, encoding="utf-8")
     globs.log("monolith", str(dst), color=GREEN)
+    schedule = [globs.command(scheduled) for scheduled in globs.schedule]
+    for scheduled in schedule: str(scheduled) # sync all
