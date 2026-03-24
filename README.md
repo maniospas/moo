@@ -137,13 +137,15 @@ have the same name. You can *not* re-enable a disabled namespace later.
 - `schedule` runs a system command after the monolith is created. Scheduled tasks run concurrently.
 
 Thus, if you run the following per `python3 moo.py src/main.c.moo --compile` it will compile the program.
+Do note the usage of `///**/` as a pattern that allows *moo* to appear commented by C tools but also evaluates
+to valid code when replaced with anything.
 
 
 ```c
 // src/main.c.moo
-/*** COMPILE: append moosafe gcc ***/
-/*** COMPILE: enabled {eval "--compile" in {mooargs}} ***/
-/*** COMPILE: schedule gcc -Wall -O3 -o lettuce src/main.c ***/
+///**/ COMPILE: append moosafe gcc
+///**/ COMPILE: enabled {eval "--compile" in {mooargs}}
+///**/ COMPILE: schedule gcc -Wall -O3 -o lettuce src/main.c
 
 #include <stdio.h>
 
