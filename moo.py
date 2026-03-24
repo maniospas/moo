@@ -20,15 +20,19 @@ class Region:
         return False
 
 class Command:
-    def __init__(self, expression):
+    def __init__(self, expression, error_callback=None):
         self.expression = expression
         self.cached = None
+        self.error_callback = error_callback
         self.proc = subprocess.Popen(expression, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         
     def __str__(self):
         if self.cached is not None: return self.cached
         stdout, stderr = self.proc.communicate()
-        assert self.proc.returncode==0, f"non-zero exit code {self.proc.returncode}\n{stderr}"
+        if self.proc.returncode:
+            message = f"non-zero exit code {self.proc.returncode}\n{stderr}"
+            if self.error_callback: self.error_callback(message)
+            raise Exception(message)
         self.cached = str(stdout)
         return self.cached
 
@@ -43,6 +47,8 @@ class Context:
         self.namespaces = dict()
         self.enabled = True
         self.shared_namespaces = shared_namespaces
+        self.tokens = list()
+        self.token_pos = 0
 
     def update(self, row, col):
         self.row = row
@@ -91,11 +97,11 @@ class Globals:
         self.log_enabled = log_enabled
         self.schedule = list()
 
-    def command(self, expression):
+    def command(self, expression, context: Context=None):
         self.log("  system", expression)
         existing = self.commands.get(expression, None)
         if existing: return existing
-        existing = Command(expression)
+        existing = Command(expression, error_callback=lambda message: self.error(message, context=context))
         self.commands[expression] = existing
         return existing
     
@@ -109,7 +115,27 @@ class Globals:
     def error(self, message: str, context: Context=None):
         print(RED+"error"+RESET, message, file=sys.stderr)
         while context is not None:
-            print(RED, " at", CYAN+context.path+RESET, "line", context.row+1, "column", context.col+1, file=sys.stderr)
+            print(RED, " in", CYAN+context.path+RESET, "line", context.row+1, "column", context.col+1, file=sys.stderr)
+            if context.tokens:
+                toks = context.tokens
+                i = context.token_pos
+                start = i
+                first_tok = ""
+                end_tok = ""
+                while start > 0:
+                    if "\n" in toks[start - 1]:
+                        first_tok = toks[start - 1].split("\n")[-1]
+                        break
+                    start -= 1
+                end = i
+                while end < len(toks):
+                    if "\n" in toks[end]:
+                        last_tok = toks[end].split("\n", 1)[0]
+                    end += 1
+                snippet = first_tok+"".join(toks[start:end])+end_tok
+                offset = sum(len(t) for t in toks[start:i])+len(first_tok)
+                print(RED + "  └─ " + RESET + snippet, file=sys.stderr)
+                print(RED + "     " + " "*offset + "^"*len(toks[i])+RESET, file=sys.stderr)
             context = context.parent
         sys.exit(1)
 
@@ -157,10 +183,13 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
             tokens = [p for p in raw_parts if p != ""]
         if num_tokens is None: num_tokens = len(tokens)
         assert pos<num_tokens, "empty block"
+        context.tokens = tokens
         if pos==num_tokens-1:
+            context.token_pos = pos
             return context[tokens[pos]], num_tokens+1
         returned = ""
         while pos<num_tokens:
+            context.token_pos = pos
             token = tokens[pos]
             if token.isspace(): 
                 pos += 1
@@ -199,14 +228,18 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 returned = eval(returned)
                 returned = str(returned)
             elif token=="system":
+                prev_pos = context.token_pos
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
                 returned = str(returned)
                 moosafe = context.get_raw_item("moosafe")
+                context.token_pos = prev_pos
                 assert ".." not in returned, ".. cannot be part of commands, as they could escape the safety sandbox: "+returned+"\nPerhaps use the path command to turn relative paths to absolute ones."
                 assert moosafe.permits(returned), "moosafe does not permit command: "+returned+"\nConsider appending its prefix to the moosafe variable. Example: append moosafe {python} to allow python execution"
-                returned = globs.command(returned)
+                returned = globs.command(returned, context=context)
             elif token=="import":
+                prev_pos = context.token_pos
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
+                context.token_pos = prev_pos
                 returned = load_file(globs, returned, context)
             elif token=="const":
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
@@ -237,9 +270,11 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 returned = Region()
                 assert pos>=num_tokens-1, "leftover code after declaring region"
             elif token=="do":
+                prev_pos = context.token_pos
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens, variable_expansion_only=True)
                 new_raw_parts = re.split(r'(\s+|:|\\+|=|[{}])', returned.replace("\n", " ").strip())
                 new_tokens = [p for p in new_raw_parts if p != ""]+tokens[pos+1:num_tokens]
+                context.token_pos = prev_pos
                 returned, _ = parse_block(globs, new_tokens, context)
             elif token=="{": raise Exception("cannot start a {} block here\n      Expecting a function or variable name.\n      Perhaps you meant to preface it with `do` or `const`?")
             else: raise Exception("unknown function: "+token+"\n      Perhaps you meant to preface it with `const`?")
