@@ -254,11 +254,12 @@ def load_file(globs: Globals, path: str, parent_context: Context=None):
     end_at_end_line = False
     with open(path) as file:
         for line_num, line in enumerate(file):
-            if not line[-1] == "\n": line = line+"\n"
             line_length = len(line)
             col_num = 0
             while col_num<line_length:
-                if (col_num<=line_length-4 and line[col_num:col_num+4]=="***/" and not end_at_end_line) or (end_at_end_line and line[col_num]=="\n"):
+                if (col_num<=line_length-4 and line[col_num:col_num+4]=="***/" and not end_at_end_line) or (end_at_end_line and (line[col_num]=="\n" or col_num==line_length-1) ):
+                    if end_at_end_line and col_num == col_num==line_length-1 and line[col_num]!="\n": 
+                        block += line[col_num]
                     has_started -= 1
                     if not has_started:
                         col_num += 1 if end_at_end_line else 4
