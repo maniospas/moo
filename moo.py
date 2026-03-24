@@ -288,10 +288,6 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
 
 def load_file(globs: Globals, path: str, parent_context: Context=None):
     context = Context(path, parent=parent_context)
-    #if not path.endswith(".moo"):
-    #    globs.error("for safety, only .moo files can be parsed: "+path, context)
-    # found = globs.imported.get(path, None)
-    # if found is not None: return found
     globs.log("  import", path)
     has_started = 0
     block = ""
@@ -323,9 +319,7 @@ def load_file(globs: Globals, path: str, parent_context: Context=None):
                 if has_started: block += line[col_num]
                 else: new_contents += line[col_num]
                 col_num += 1
-    #globs.imported[path] = new_contents
     return new_contents
-
 
 
 if __name__ == "__main__":

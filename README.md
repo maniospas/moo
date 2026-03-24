@@ -21,6 +21,9 @@ everything is inlined in your code.
 
 Install Python 3.11 or later and download *moo.py*. You can optionally get some useful *scripts/* too.
 
+You can also install the *moolang* VSCODE extension to highlight *moo* files. You can alternate between
+your programming language and *moo* highlighting.
+
 Declare the building process within your text or code.
 The end-goal is to create one large file (THE MONOLITH)
 that packs in everything about your project. This could be 
@@ -56,9 +59,9 @@ Hi!
 
 The builtin function shown above are:
 - `+=` adds some data to a list of values. In this case, `moosafe` determines allowed system command prefixes. More on lists and safety later.
-- `system` runs a system command and captures its console output. These are scheduled as parallel processes, cached, and execute lazily. 
+- `system` runs a system command and captures its console output. These are scheduled as parallel processes, cached, and execute lazily. If you want to forcefully synchronize them, use `pass {variable}` to force them to evaluate and then be ignored.
 - `const` acknowledges the rest of the text as a constant value
-- `import` inlines another file. For safety, only *.moo* files can currently be imported. 
+- `import` inlines another file. Imported files can access and shadow the variables of their callers.
 
 Now, when built on the linux platform with *python3 moo.py hello.txt.moo* the
 following file is produced by removing the *.in* extension:
@@ -96,10 +99,16 @@ Some of available scripts (the list is growing) are:
 - *scripts/b64.py* converts a file to base64 encoding.
 
 **Safety.** In general, use `command` to run specific external commands. The `moosafe` variable determines how the command
-can be prefixed. A common default is `/*** append moosafe {python} scripts/ ***/` to allowing all contents of the *scripts/* folder
-to be called by Python while preventing all other. You can try to append to the safety list from anywhere, but this action will
-be rejected unless the ENTRANT FILE allows a superset of permissions. This is done to achieve safety. Also note that `..` is not allowed
-within commands, as it can escape the safety mechanism. Use path resolution to convert relative paths to absolute ones.
+can be prefixed. A common default is `/*** append moosafe {python} scripts/ ***/` for allowing all contents of the *scripts/* folder
+to be called by Python while preventing all other programs AND Python from being executed with code injection attacks. The assumption
+is that you trust whitelisted commands and folder combinations.
+
+You can try to append to the safety list from anywhere, but this action will
+be rejected unless the ENTRANT FILE allows a superset of permissions. This is done to achieve safety. Also `..` is not allowed
+within commands, so as to prevent escaping from the safety mechanism. If you want to use it, also use 
+path resolution everywhere to convert relative paths to absolute ones.
+
+**For now, `do` and `eval` remain unsafe.**
 
 **Reuse** moo code that is packed into `const` data like below. The `do` statement works by replacing variables 
 (only variables!) with their expanded version and *then* properly interpreting the result. 
@@ -127,6 +136,10 @@ Qk9EWSAqKiovPC9ib2R5PgoK
 
 **Namespaces** are also there to compartmenize and enable/disable parts of files.
 To work within a namespace, prefix your instruction with `NAME:`, where *NAME* is its name.
+You can access all namespaces declared in the same file from within each other, 
+but *not* namespaces declared in other files, even if those files import the current one.
+What you *can* do is call another file within a namespace to adjust what information is passed 
+and return without polluting your *moo* code.
 The following example demonstrates usage of a namespace, alongside a list of final features:
 
 - `enabled` checks for a True or False value and correspondingly disables all future uses of the
@@ -155,5 +168,12 @@ int main() {
 }
 ```
 
+**Error messages.** If something goes wrong, *moo* will create a stack trace
+of its failed attempt. Do note that that lines and columns refer to the start
+of *moo* blocks within your code. However, there is proper denotation of
+the exact point of failure, even within nested {} blocks or expanded expressions. 
+If system commands fail due to lazy execution,
+their initial declaration is pointed out. Here is an example.
 
+![examples/example_error.png](examples/example_error.png)
 
