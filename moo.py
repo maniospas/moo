@@ -34,7 +34,7 @@ class Command:
 
 
 class Context:
-    def __init__(self, path="<inline>", parent=None):
+    def __init__(self, path="<inline>", parent=None, shared_namespaces=False):
         self.path = path
         self.parent = parent
         self.row = 0
@@ -42,6 +42,7 @@ class Context:
         self.vars = dict()
         self.namespaces = dict()
         self.enabled = True
+        self.shared_namespaces = shared_namespaces
 
     def update(self, row, col):
         self.row = row
@@ -49,14 +50,14 @@ class Context:
 
     def get_existing_namespace(self, name: str):
         namespace = self.namespaces.get(name, None)
-        if namespace is None and self.parent: return self.parent.get_existing_namespace(name)
+        if namespace is None and self.parent and self.shared_namespaces: return self.parent.get_existing_namespace(name)
         return namespace
 
     def get_namespace(self, name: str):
         namespace = self.namespaces.get(name, None)
-        if namespace is None and self.parent: namespace = self.parent.get_existing_namespace(name)
+        if namespace is None and self.parent and self.shared_namespaces: namespace = self.parent.get_existing_namespace(name)
         if namespace is not None: return namespace
-        namespace = Context(path=self.path+"/"+name, parent=self)
+        namespace = Context(path=self.path+"/"+name, parent=self, shared_namespaces=True)
         namespace.update(self.row, self.col)
         self.namespaces[name] = namespace
         return namespace
