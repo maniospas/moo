@@ -216,7 +216,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 assert isinstance(var, Region), "can apply += to regions: "+varname
                 while pos<num_tokens-1 and tokens[pos+1].isspace(): 
                     pos += 1
-                returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
+                returned, pos = parse_block(globs, tokens, context, pos+1, num_tokens)
                 returned = str(returned)
                 if varname=="moosafe": 
                     assert not context.parent.parent or var.permits(returned), "the moosafe region can only be edited from the main context but a dependent file tried to append contents that do not already exist: "+returned
@@ -231,8 +231,8 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 new_raw_parts = re.split(r'(\s+|:|\\+|=|[{}])', returned.replace("\n", " ").strip())
                 new_tokens = [p for p in new_raw_parts if p != ""]+tokens[pos+1:num_tokens]
                 returned, _ = parse_block(globs, new_tokens, context)
-            elif token=="{": raise Exception("cannot start a {} block here\nExpecting a function or variable name. Perhaps you meant to preface it with `do`?")
-            else: raise Exception("unknown function: "+token+"\nPerhaps you meant to preface it with `const`?")
+            elif token=="{": raise Exception("cannot start a {} block here\n      Expecting a function or variable name.\n      Perhaps you meant to preface it with `do` or `const`?")
+            else: raise Exception("unknown function: "+token+"\n      Perhaps you meant to preface it with `const`?")
             pos += 1
         return returned, pos
     except Exception as e:
@@ -251,23 +251,27 @@ def load_file(globs: Globals, path: str, parent_context: Context=None):
     has_started = 0
     block = ""
     new_contents = ""
+    end_at_end_line = False
     with open(path) as file:
         for line_num, line in enumerate(file):
+            if not line[-1] == "\n": line = line+"\n"
             line_length = len(line)
             col_num = 0
             while col_num<line_length:
-                if col_num<=line_length-4 and line[col_num:col_num+4]=="***/":
+                if (col_num<=line_length-4 and line[col_num:col_num+4]=="***/" and not end_at_end_line) or (end_at_end_line and line[col_num]=="\n"):
                     has_started -= 1
                     if not has_started:
-                        col_num += 4
+                        col_num += 1 if end_at_end_line else 4
                         returned = parse_block(globs, block, context)
                         new_contents += str(returned[0])
                         block = ""
+                        end_at_end_line = False
                         continue
-                if col_num<=line_length-4 and line[col_num:col_num+4]=="/***":
+                if col_num<=line_length-4 and ((line[col_num:col_num+4]=="/***" and not end_at_end_line) or line[col_num:col_num+4]=="/**/"):
                     has_started += 1
                     if has_started==1:
                         context.update(line_num, col_num)
+                        end_at_end_line = line[col_num:col_num+4]=="/**/"
                         col_num += 4
                         continue
                 if has_started: block += line[col_num]

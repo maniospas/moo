@@ -30,7 +30,9 @@ the macro system), an html with embedded fonts and images as base64
 encoding, and so on.
 
 Here's an example, where `/*** code ***/` embeds 
-*moo* code, like variables and expressions.
+*moo* code, like variables and expressions. You may use
+`/**/ code` for code that ends at end of line; 
+the last case skips the line break.
 
 ```c
 // hello.linux.txt.moo
@@ -45,17 +47,17 @@ Assignments do not propagate the value.
 ```c
 // hello.txt.moo
 Hi!
-/*** moosafe += {python} scripts/ ***/
-/*** os = system {python} scripts/os.py ***/
-/*** user = const maniospas ***/
-/*** import hello.{os}.txt.moo ***/
+/**/ moosafe += const {python} scripts/
+/**/ os = system {python} scripts/os.py
+/**/ user = const maniospas
+/**/ import hello.{os}.txt.moo
 - Be safe out there.
 ```
 
 The builtin function shown above are:
 - `+=` adds some data to a list of values. In this case, `moosafe` determines allowed system command prefixes. More on lists and safety later.
 - `system` runs a system command and captures its console output. These are scheduled as parallel processes, cached, and execute lazily. 
-- `const` declares the rest of the text as a constant value
+- `const` acknowledges the rest of the text as a constant value
 - `import` inlines another file. For safety, only *.moo* files can currently be imported. 
 
 Now, when built on the linux platform with *python3 moo.py hello.txt.moo* the
@@ -80,8 +82,8 @@ Hello world from a linux file!
 by default.
 
 ```c
-/*** BODY = region ***/
-/*** append BODY this will show in the body ***/
+/**/ BODY = region
+/**/ BODY += this will show in the body
 <body>/***BODY***/</body>
 ```
 
@@ -107,10 +109,10 @@ appropriate argument. UYou can declare such helpers at the top level and have th
 shared in imported *moo* files.
 
 ```c
-/*** append moosafe {python} scripts/
-/*** b64 = const system {python} scripts/b64.py***/
-/*** b64 ***/
-/*** do {b64} examples/file1.txt.moo***/
+/**/ append moosafe {python} scripts/
+/**/ b64 = const system {python} scripts/b64.py
+/**/ b64
+/**/ do {b64} examples/file1.txt.moo
 ```
 
 This will create a file like the following (the middle b64 is used to demonstrate the exact command):
