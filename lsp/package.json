@@ -2,7 +2,7 @@
   "name": "moolang",
   "displayName": "moolang",
   "description": "Standard‑theme highlighting for moo /*** … ***/ blocks, usable in every language.",
-  "version": "0.0.36",
+  "version": "0.0.37",
   "engines": { "vscode": "^1.70.0" },
 
   "contributes": {

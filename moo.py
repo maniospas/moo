@@ -47,8 +47,14 @@ class Context:
         self.row = row
         self.col = col
 
+    def get_existing_namespace(self, name: str):
+        namespace = self.namespaces.get(name, None)
+        if namespace is None and self.parent: return self.parent.get_existing_namespace(name)
+        return namespace
+
     def get_namespace(self, name: str):
         namespace = self.namespaces.get(name, None)
+        if namespace is None and self.parent: namespace = self.parent.get_existing_namespace(name)
         if namespace is not None: return namespace
         namespace = Context(path=self.path+"/"+name, parent=self)
         namespace.update(self.row, self.col)
@@ -165,7 +171,10 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 if not namespace.enabled:
                     pos = num_tokens
                     continue
-                returned, pos = parse_block(globs, block, namespace, pos+2, num_tokens)
+                pos += 2
+                while pos<num_tokens and tokens[pos].isspace(): 
+                    pos += 1
+                returned, pos = parse_block(globs, block, namespace, pos, num_tokens)
                 assert pos>=num_tokens-1, "leftover code after namespace ends"
             elif pos<num_tokens-2 and tokens[pos+1]=="=":
                 assert token!="moosafe", "the moosafe region cannot be shadowed because it holds permissions"
