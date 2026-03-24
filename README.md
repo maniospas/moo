@@ -45,7 +45,7 @@ Assignments do not propagate the value.
 ```c
 // hello.txt.moo
 Hi!
-/*** append moosafe {python} scripts/ ***/
+/*** moosafe += {python} scripts/ ***/
 /*** os = system {python} scripts/os.py ***/
 /*** user = const maniospas ***/
 /*** import hello.{os}.txt.moo ***/
@@ -53,7 +53,7 @@ Hi!
 ```
 
 The builtin function shown above are:
-- `append` adds some data to a region variable that holds multiple values. In this case into `moosafe` that determines allowed system command prefixes. More on regions and safety later.
+- `+=` adds some data to a list of values. In this case, `moosafe` determines allowed system command prefixes. More on lists and safety later.
 - `system` runs a system command and captures its console output. These are scheduled as parallel processes, cached, and execute lazily. 
 - `const` declares the rest of the text as a constant value
 - `import` inlines another file. For safety, only *.moo* files can currently be imported. 

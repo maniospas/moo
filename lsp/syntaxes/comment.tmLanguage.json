@@ -19,6 +19,12 @@
           }
         },
         {
+          "match": "(?<=/\\*\\*\\*)\\s*([A-Za-z_]\\w*)\\s*(?=\\+\\=)",
+          "captures": {
+            "1": { "name": "variable.other.constant" }
+          }
+        },
+        {
           "match": "(?<=\\bappend\\s+)([A-Za-z_]\\w*)",
           "captures": {
             "1": { "name": "variable.other.constant" }
@@ -43,7 +49,7 @@
           }
         },
         {
-          "match": "[=:{}]",
+          "match": "[=:{}+]",
           "name": "keyword.operator"
         }
       ]

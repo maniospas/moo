@@ -146,7 +146,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
         if isinstance(block, list): tokens = block
         else:
             block = block.replace("\n", " ").strip()
-            raw_parts = re.split(r'(\s+|:|=|[{}])', block)
+            raw_parts = re.split(r'(\s+|:|\\+|=|[{}])', block)
             tokens = [p for p in raw_parts if p != ""]
         if num_tokens is None: num_tokens = len(tokens)
         assert pos<num_tokens, "empty block"
@@ -207,12 +207,13 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
                 globs.schedule.append(str(returned))
                 returned = ""
-            elif token=="append":
-                pos += 1
-                varname = tokens[pos]
+            elif pos<num_tokens-2 and tokens[pos+1]=="+":
+                pos += 2
+                assert tokens[pos]=="=", "+ is not a valid operator. Perhaps you meant += but it was followed by: "+tokens[pos]
+                varname = token
                 var = context.get_raw_item(varname)
                 assert var is not None, "cannot find variable: "+varname
-                assert isinstance(var, Region), "can only append to regions: "+varname
+                assert isinstance(var, Region), "can apply += to regions: "+varname
                 while pos<num_tokens-1 and tokens[pos+1].isspace(): 
                     pos += 1
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
@@ -227,7 +228,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 assert pos>=num_tokens-1, "leftover code after declaring region"
             elif token=="do":
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens, variable_expansion_only=True)
-                new_raw_parts = re.split(r'(\s+|:|=|[{}])', returned.replace("\n", " ").strip())
+                new_raw_parts = re.split(r'(\s+|:|\\+|=|[{}])', returned.replace("\n", " ").strip())
                 new_tokens = [p for p in new_raw_parts if p != ""]+tokens[pos+1:num_tokens]
                 returned, _ = parse_block(globs, new_tokens, context)
             elif token=="{": raise Exception("cannot start a {} block here\nExpecting a function or variable name. Perhaps you meant to preface it with `do`?")
