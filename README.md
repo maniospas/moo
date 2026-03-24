@@ -110,8 +110,8 @@ path resolution everywhere to convert relative paths to absolute ones.
 
 **For now, `do` and `eval` remain unsafe.**
 
-**Reuse** moo code that is packed into `const` data like below. The `do` statement works by replacing variables 
-(only variables!) with their expanded version and *then* properly interpreting the result. 
+**Reuse** moo code that is packed into `const` data like below. The `do` statement works by replacing nested
+statements with their expanded version and *then* properly interpreting the result. Interpretation occurs once only. 
 Under this pattern, the `const` declaration works like a capturing lambda expression as it resolves
 all its `{}` segments at the time of declaration. So, below we get to call the b64 Python script from with an 
 appropriate argument. UYou can declare such helpers at the top level and have them be

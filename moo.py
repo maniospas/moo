@@ -9,12 +9,18 @@ class Region:
         self.sep = sep
     
     def push(self, contents):
-        self.contents.append(contents)
+        if contents: self.contents.append(contents)
+
+    def __resolve_contents(self):
+        for i in range(len(self.contents)): # do not allocate new list
+            self.contents[i] = str(self.contents[i])
     
     def __str__(self):
+        self.__resolve_contents()
         return "\n".join(self.contents) if self.contents else ""
 
     def permits(self, value):
+        self.__resolve_contents()
         for contents in self.contents:
             if value.startswith(contents): return True
         return False
@@ -63,7 +69,7 @@ class Context:
         namespace = self.namespaces.get(name, None)
         if namespace is None and self.parent and self.shared_namespaces: namespace = self.parent.get_existing_namespace(name)
         if namespace is not None: return namespace
-        namespace = Context(path=self.path+"/"+name, parent=self, shared_namespaces=True)
+        namespace = Context(path=name, parent=self, shared_namespaces=True)
         namespace.update(self.row, self.col)
         self.namespaces[name] = namespace
         return namespace
@@ -115,7 +121,10 @@ class Globals:
     def error(self, message: str, context: Context=None):
         print(RED+"error"+RESET, message, file=sys.stderr)
         while context is not None:
-            print(RED, " in", CYAN+context.path+RESET, "line", context.row+1, "column", context.col+1, file=sys.stderr)
+            if context.parent is None or context.shared_namespaces: 
+                print(RED, " in namespace", CYAN+context.path+RESET, file=sys.stderr)
+            else: 
+                print(RED, " in", CYAN+context.path+RESET, "line", context.row+1, "column", context.col+1, file=sys.stderr)
             if context.tokens:
                 toks = context.tokens
                 i = context.token_pos
@@ -179,14 +188,49 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
         if isinstance(block, list): tokens = block
         else:
             block = block.replace("\n", " ").strip()
-            raw_parts = re.split(r'(\s+|:|\\+|=|[{}])', block)
+            raw_parts = re.split(r'(\s+|:|\\+|/\*\*/|=|[{}])', block)
             tokens = [p for p in raw_parts if p != ""]
         if num_tokens is None: num_tokens = len(tokens)
-        assert pos<num_tokens, "empty block"
+        assert pos<num_tokens, "empty block\nPerhaps use pass _ to skip a moo line."
         context.tokens = tokens
+
+        while pos<num_tokens and tokens[pos].isspace():
+            pos += 1
+
+        first_splitter = pos
+        depth = 0
+        while first_splitter<num_tokens-1:
+            if tokens[first_splitter] == "{": depth += 1
+            if tokens[first_splitter] == "}": depth -= 1
+            if tokens[first_splitter] == "/**/" and not depth: break
+            first_splitter += 1
+        if first_splitter<num_tokens-1:
+            ret = Region()
+            if first_splitter>pos: ret.push(parse_block(globs, tokens, context, pos, first_splitter)[0])
+            first_splitter += 1
+            pos = first_splitter
+            while first_splitter<num_tokens-1:
+                if tokens[first_splitter] == "{": depth += 1
+                if tokens[first_splitter] == "}": depth -= 1
+                if tokens[first_splitter] == "/**/" and not depth: 
+                    ret.push(parse_block(globs, tokens, context, pos, first_splitter-1)[0])
+                    first_splitter += 1
+                    pos = first_splitter
+                first_splitter += 1
+            if first_splitter>=num_tokens-1: 
+                ret.push(parse_block(globs, tokens, context, pos, first_splitter+1)[0])
+                first_splitter += 2
+                pos = first_splitter
+            return ret, pos
         if pos==num_tokens-1:
             context.token_pos = pos
-            return context[tokens[pos]], num_tokens+1
+            token = tokens[pos]
+            if token=="moolog":
+                ret = Region()
+                for var, value in context.vars.items():
+                    ret.push("/**/ " + var + " = const " + value)
+                return ret, num_tokens+1
+            return context[token], num_tokens+1
         returned = ""
         while pos<num_tokens:
             context.token_pos = pos
@@ -260,8 +304,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 while pos<num_tokens-1 and tokens[pos+1].isspace(): 
                     pos += 1
                 returned, pos = parse_block(globs, tokens, context, pos+1, num_tokens)
-                returned = str(returned)
-                if varname=="moosafe": 
+                if varname=="moosafe":
                     assert not context.parent.parent or var.permits(returned), "the moosafe region can only be edited from the main context but a dependent file tried to append contents that do not already exist: "+returned
                 var.push(returned)
                 returned = ""
@@ -271,8 +314,9 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 assert pos>=num_tokens-1, "leftover code after declaring region"
             elif token=="do":
                 prev_pos = context.token_pos
-                returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens, variable_expansion_only=True)
-                new_raw_parts = re.split(r'(\s+|:|\\+|=|[{}])', returned.replace("\n", " ").strip())
+                returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens, variable_expansion_only=False)
+                returned = str(returned)
+                new_raw_parts = re.split(r'(\s+|:|\\+|/\*\*/|=|[{}])', returned.replace("\n", " ").strip())
                 new_tokens = [p for p in new_raw_parts if p != ""]+tokens[pos+1:num_tokens]
                 context.token_pos = prev_pos
                 returned, _ = parse_block(globs, new_tokens, context)
@@ -301,6 +345,8 @@ def load_file(globs: Globals, path: str, parent_context: Context=None):
                 if (col_num<=line_length-4 and line[col_num:col_num+4]=="***/" and not end_at_end_line) or (end_at_end_line and (line[col_num]=="\n" or col_num==line_length-1) ):
                     if end_at_end_line and col_num == col_num==line_length-1 and line[col_num]!="\n": 
                         block += line[col_num]
+                    if end_at_end_line and (line[col_num]=="\n" or col_num==line_length-1):
+                        has_started = 1 # forcefully end at end of line blocks that start with /**/
                     has_started -= 1
                     if not has_started:
                         col_num += 1 if end_at_end_line else 4
@@ -309,7 +355,7 @@ def load_file(globs: Globals, path: str, parent_context: Context=None):
                         block = ""
                         end_at_end_line = False
                         continue
-                if col_num<=line_length-4 and ((line[col_num:col_num+4]=="/***" and not end_at_end_line) or line[col_num:col_num+4]=="/**/"):
+                if col_num<=line_length-4 and ((line[col_num:col_num+4]=="/***" and not end_at_end_line) or (not has_started and line[col_num:col_num+4]=="/**/")):
                     has_started += 1
                     if has_started==1:
                         context.update(line_num, col_num)
@@ -346,9 +392,9 @@ if __name__ == "__main__":
 ⢸⣿⣿⣿⣿⡏⠉⠉⣿⣿⣿⣿⣿⠿⠿⠿⠿⢿⣿⣿⣿⣿⣿⠀⠀⠀⠀
 ⠀⢿⣿⣿⣿⠇⠀⠀⠻⣿⣿⣿⠏⠀⠀⠀⠀   ⠿⣿⣿⣿⠇⠀
         """)
-    globs.log("MOO", "- version 0.2", color=GREEN)
+    globs.log("MOO", "- version 0.3", color=GREEN)
     path = args[0]
-    system_context = Context("<system>")
+    system_context = Context("MOO")
     system_context["python"] = sys.executable
     system_context["mooargs"] = str(args)
     system_context["cwd"] = str(Path.cwd().resolve())

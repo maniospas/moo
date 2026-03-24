@@ -1,0 +1,7 @@
+
+/**/ x = const first value
+/**/ y = const second value
+/**/ z = const third value
+first value imported
+second value imported
+third value imported
