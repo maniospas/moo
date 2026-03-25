@@ -57,7 +57,7 @@ Hi!
 - Be safe out there.
 ```
 
-The builtin function shown above are:
+The builtins shown above are:
 - `+=` adds some data to a list of values. In this case, `moosafe` determines allowed system command prefixes. More on lists and safety later.
 - `system` runs a system command and captures its console output. These are scheduled as parallel processes, cached, and execute lazily. If you want to forcefully synchronize them, use `pass {variable}` to force them to evaluate and then be ignored.
 - `const` acknowledges the rest of the text as a constant value
