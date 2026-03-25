@@ -1,6 +1,6 @@
 # 🐮 moolang 
 
-*There are no configuration files! Only your code and THE MOO-NOLITH.*
+*A build system to embed in your other code. There are no configuration files! Only your code and THE MOO-NOLITH.*
 
 This project was created because monoliths are lightweight.
 But separation of concerns is also great. Thus you can use *moo*; a 
@@ -25,8 +25,8 @@ You can also install the *moolang* VSCODE extension to highlight *moo* files. Yo
 your programming language and *moo* highlighting.
 
 Declare the building process within your text or code.
-The end-goal is to create one large file (THE MONOLITH)
-that packs in everything about your project. This could be 
+The end-goal is to create one file (THE MOO-NOLITH)
+that packs in everything about your project. This could even be
 a large C file with platform-conditioned compilation resolved 
 (you can also use *moo* as a more powerful yet safer replacement of
 the macro system), an html with embedded fonts and images as base64

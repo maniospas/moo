@@ -306,7 +306,13 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
                 returned = ""
             elif token=="schedule":
+                prev_pos = context.token_pos
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
+                returned = str(returned)
+                moosafe = context.get_raw_item("moosafe")
+                context.token_pos = prev_pos
+                assert ".." not in returned, ".. cannot be part of commands, as they could escape the safety sandbox: "+returned+"\nPerhaps use the path command to turn relative paths to absolute ones."
+                assert moosafe.permits(returned), "moosafe does not permit system command: "+returned+"\nConsider appending its prefix to the moosafe variable. Example: append moosafe {python} to allow python execution"
                 globs.schedule.append(str(returned))
                 returned = ""
             elif pos<num_tokens-2 and tokens[pos+1]=="+":
