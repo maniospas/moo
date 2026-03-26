@@ -1,4 +1,10 @@
-/*** moo.safe += const {moo.python} ***/
-/*** b64 = const system {moo.python} scripts/b64.py ***/
-/*** b64 ***/
-/*** do {b64} examples/file1.txt.moo ***/
+/**/ SPACE1: x = const first value
+/**/ SPACE1: y = const second value
+/**/ SPACE1: z = const third value
+
+/**/ do {SPACE1: moolog}
+
+/*** moolog ***/
+/*** const {x} imported ***/
+/*** const {y} imported ***/
+/*** const {z} imported ***/

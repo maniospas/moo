@@ -1,4 +1,2 @@
 /**/ moo.safe += const {moo.python} scripts/
-/**/ user = const world
-/**/ file = import examples/file2.{system {moo.python} scripts/os.py}.txt.moo
-===== /*** file ***/ =====
+/**/ system {moo.python} scripts/b64.py examples/file1.txt.moo

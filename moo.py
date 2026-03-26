@@ -99,7 +99,7 @@ class Context:
     def __setitem__(self, name: str, value: str|Region|Command):
         existing = self.vars.get(name, None)
         if existing: 
-            assert isinstance(existing, Region), "Can append but not reassign to region: "+name
+            assert isinstance(existing, Region), "Can append but not reassign to list: "+name
             assert isinstance(value, Command)==isinstance(existing, Command), "Conflicting variable type (command vs const): "+name
             if not isinstance(value, Command): assert value == existing, "Cannot overwrite previously different variable: "+name
             else: assert value.expression == existing.expression, "Cannot overwrite previously different variable: "+name
@@ -137,16 +137,17 @@ class Globals:
         self.temp_counter += 1
         return "temp"+str(self.temp_counter)
 
-    def log(self, kind: str, message: str, color=CYAN):
-        if self.log_enabled: print(color+kind+RESET, message, file=sys.stderr)
+    def log(self, kind: str, message: str, color=None):
+        if color is None: color=CYAN # allow CYAN overwrites by --nocolor
+        if self.log_enabled: print(color+kind+RESET, message)
 
     def error(self, message: str, context: Context=None):
-        print(RED+"error"+RESET, message, file=sys.stderr)
+        print(RED+"error"+RESET, message)
         while context is not None:
             if context.parent is None or context.shared_namespaces: 
-                print(RED, " in namespace", CYAN+context.path+RESET, file=sys.stderr)
+                print(RED, " in namespace", CYAN+context.path+RESET)
             else: 
-                print(RED, " in", CYAN+context.path+RESET, "line", context.row+1, "column", context.col+1, file=sys.stderr)
+                print(RED, " in", CYAN+context.path+RESET, "line", context.row+1, "column", context.col+1)
             if context.tokens:
                 toks = context.tokens
                 i = context.token_pos
@@ -165,8 +166,8 @@ class Globals:
                     end += 1
                 snippet = first_tok+"".join(toks[start:end])+end_tok
                 offset = sum(len(t) for t in toks[start:i])+len(first_tok)
-                print(RED + "  └─ " + RESET + snippet, file=sys.stderr)
-                print(RED + "     " + " "*offset + "^"*len(toks[i])+RESET, file=sys.stderr)
+                print(RED + "  └─ " + RESET + snippet)
+                print(RED + "     " + " "*offset + "^"*len(toks[i])+RESET)
             context = context.parent
         sys.exit(1)
 
@@ -273,7 +274,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 returned, pos = parse_block(globs, block, namespace, pos, num_tokens)
                 assert pos>=num_tokens-1, "leftover code after namespace ends"
             elif pos<num_tokens-2 and tokens[pos+1]=="=":
-                assert token!="moo.safe", "the moo.safe region cannot be shadowed because it holds permissions"
+                assert token!="moo.safe", "the moo.safe list cannot be shadowed because it holds permissions"
                 returned, pos = parse_block(globs, block, context, pos+2, num_tokens)
                 context[token] = returned
                 returned = ""
@@ -309,7 +310,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 returned = load_file(globs, returned, context)
             elif token=="const":
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
-            elif token=="pass":
+            elif token=="hide":
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
                 returned = ""
             elif token=="schedule":
@@ -328,15 +329,15 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 varname = token
                 var = context.get_raw_item(varname)
                 assert var is not None, "cannot find variable: "+varname
-                assert isinstance(var, Region), "can apply += to regions: "+varname
+                assert isinstance(var, Region), "can only apply += to lists: "+varname
                 while pos<num_tokens-1 and tokens[pos+1].isspace(): 
                     pos += 1
                 returned, pos = parse_block(globs, tokens, context, pos+1, num_tokens)
                 if varname=="moo.safe":
-                    assert not context.parent.parent or var.permits(returned), "the moo.safe region can only be edited from the main context but a dependent file tried to append contents that do not already exist: "+returned
+                    assert not context.parent.parent or var.permits(returned), "the moo.safe list can only be edited from the main context but a dependent file tried to append contents that do not already exist: "+returned
                 var.push(returned)
                 returned = ""
-            elif token=="region":
+            elif token=="list":
                 prev_pos = context.token_pos
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens, variable_expansion_only=False)
                 context.token_pos = prev_pos
@@ -347,7 +348,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens, variable_expansion_only=False)
                 context.token_pos = prev_pos
                 returned = context.get_raw_item(returned)
-                assert isinstance(returned, Region), "placeholders can only be regions"
+                assert isinstance(returned, Region), "placeholders can only be lists"
                 application_context = context.non_shared_parent()
                 assert application_context, "failed to properly understand in which file to create the placeholder"
                 temp = "/***::"+globs.create_temp()+"::***/"
@@ -421,6 +422,7 @@ def load_file(globs: Globals, path: str, parent_context: Context=None):
 if __name__ == "__main__":
     moopath = Path(sys.argv[0]).resolve()
     args = sys.argv[1:]
+    if extract_arg(args, "--nocolor"): RED, GREEN, CYAN, YELLOW, RESET = "", "", "", "", ""
     globs = Globals(log_enabled=not extract_arg(args, "--silent"))
     stream = extract_arg(args, "--stream")
     if len(args) < 1:
