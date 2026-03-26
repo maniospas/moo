@@ -25,6 +25,9 @@ Some of the things you can do by inlining some moo code in your files:
 
 ## 📋 Changelog
 
+### MOO - 0.5 (nightly build)
+- Loops
+
 ### MOO - 0.4 (26 March 2026)
 - First stable version (changelog starts tracking from hereon)
 - Test suit

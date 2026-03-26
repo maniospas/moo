@@ -51,7 +51,7 @@ class Command:
         if self.cached is not None: return self.cached
         stdout, stderr = self.proc.communicate()
         if self.proc.returncode:
-            message = f"non-zero exit code {self.proc.returncode}\n{stderr}"
+            message = f"{RED}from {CYAN}system {RESET}{self.expression}\n{RED}---------------------------------------------{RESET}\n{stdout}{stderr}{RED}---------------------------------------------{RESET}\n{RED}error{RESET} non-zero exit code {self.proc.returncode}"
             if self.error_callback: self.error_callback(message)
             raise Exception(message)
         self.cached = str(stdout)
@@ -115,7 +115,7 @@ class Context:
         existing = self.vars.get(name, None)
         if existing is None and self.parent: return self.parent[name]
         assert existing is not None, "Variable not found: "+name
-        return str(existing)
+        return existing
 
 class Globals:
     def __init__(self, log_enabled=True):
@@ -183,7 +183,7 @@ def consume_block(globs: Globals, tokens: list[str], context: Context, pos:int, 
         if token=="{":
             if variable_expansion_only: 
                 if pos<num_tokens-2 and tokens[pos+1]!="{" and tokens[pos+2] == "}":
-                    returned = context[tokens[pos+1]] 
+                    returned = context[tokens[pos+1]]
                     pos += 3
                     ret += str(returned)
                     continue
@@ -198,6 +198,7 @@ def consume_block(globs: Globals, tokens: list[str], context: Context, pos:int, 
                     depth -= 1
                     if depth == 0:
                         returned, pos = parse_block(globs, tokens, context, start+1, pos)
+                        context.token_pos = pos
                         ret += str(returned)
                         break
                 pos += 1
@@ -301,7 +302,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 moosafe = context.get_raw_item("moo.safe")
                 context.token_pos = prev_pos
                 assert ".." not in returned, ".. cannot be part of commands, as they could escape the safety sandbox: "+returned+"\nPerhaps use the path command to turn relative paths to absolute ones."
-                assert moosafe.permits(returned), "moo.safe does not permit command: "+returned+"\nConsider appending its prefix to the moo.safe variable. Example: append moo.safe {python} to allow python execution"
+                assert moosafe.permits(returned), "moo.safe does not permit command: "+returned+"\nConsider appending its prefix to the moo.safe variable.\nExample: `moo.safe+={moo.python}` allows python execution."
                 returned = globs.command(returned, context=context)
             elif token=="import":
                 prev_pos = context.token_pos
@@ -312,6 +313,10 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
             elif token=="hide":
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
+                returned = ""
+            elif token=="print":
+                returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
+                print(returned)
                 returned = ""
             elif token=="schedule":
                 prev_pos = context.token_pos
@@ -329,7 +334,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 varname = token
                 var = context.get_raw_item(varname)
                 assert var is not None, "cannot find variable: "+varname
-                assert isinstance(var, Region), "can only apply += to lists: "+varname
+                assert isinstance(var, Region), "+= can only be applied to lists: "+varname
                 while pos<num_tokens-1 and tokens[pos+1].isspace(): 
                     pos += 1
                 returned, pos = parse_block(globs, tokens, context, pos+1, num_tokens)
@@ -337,15 +342,59 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                     assert not context.parent.parent or var.permits(returned), "the moo.safe list can only be edited from the main context but a dependent file tried to append contents that do not already exist: "+returned
                 var.push(returned)
                 returned = ""
+            elif token=="for":
+                prev_pos = context.token_pos
+                pos += 1
+                varname = tokens[pos]
+                context.token_pos = pos
+                assert varname!="moo.safe", "cannot overwrite the moo.safe list"
+                assert varname not in context.vars, "variable already exists\nPerhaps try in a namespace."
+                pos += 1
+                while pos<num_tokens and tokens[pos].isspace(): 
+                    pos += 1
+                context.token_pos = pos
+                depth = 0
+                block_end = pos
+                while block_end<num_tokens:
+                    if tokens[block_end]=="{": depth += 1
+                    if tokens[block_end]=="}": depth -= 1
+                    if depth==0 and tokens[block_end]==":": break
+                    block_end += 1
+                prev_pos = pos+1
+                context.token_pos = prev_pos
+                iterator, pos = parse_block(globs, tokens, context, pos, block_end)
+                assert isinstance(iterator, Region), "for loops need regions to be returned by {}"
+                prev_pos = pos+1
+                context.token_pos = prev_pos
+                returned = Region()
+                for value in iterator.contents:
+                    context.vars[varname] = value
+                    newvalue, _ = parse_block(globs, tokens, context, pos+1, num_tokens)
+                    returned.push(newvalue)
+                    context.token_pos = prev_pos
+                del context.vars[varname]
+                pos = num_tokens+1
             elif token=="list":
                 prev_pos = context.token_pos
-                returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens, variable_expansion_only=False)
+                returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
                 context.token_pos = prev_pos
                 returned = str(returned)
                 returned = Region(returned)
+            elif token=="range":
+                prev_pos = context.token_pos
+                returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
+                context.token_pos = prev_pos
+                returned = str(returned)
+                returned = returned.strip().split(" ")
+                assert len(returned)==2, "range should be followed by two space-separated numbers"
+                min_num = int(returned[0])
+                max_num = int(returned[1])
+                returned = Region()
+                for i in range(min_num, max_num):
+                    returned.push(str(i))
             elif token=="placeholder":
                 prev_pos = context.token_pos
-                returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens, variable_expansion_only=False)
+                returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
                 context.token_pos = prev_pos
                 returned = context.get_raw_item(returned)
                 assert isinstance(returned, Region), "placeholders can only be lists"
@@ -369,7 +418,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 returned, _ = parse_block(globs, new_tokens, context)
             elif token=="{": raise Exception("cannot start a {} block here\n      Expecting a function or variable name.\n      Perhaps you meant to preface it with `do` or `const`?")
             elif token==":": raise Exception("missing namespace name before :\nIf you did not write this yourself, this error may occur due to unresolved placeholders.")
-            else: raise Exception("unknown function: "+token+"\n      Perhaps you meant to preface it with `const`?")
+            else: raise Exception("unknown instruction: "+token+"\n      Perhaps you meant to preface it with `const`?")
             pos += 1
         return returned, pos
     except Exception as e:
@@ -444,7 +493,7 @@ if __name__ == "__main__":
 ⢸⣿⣿⣿⣿⡏⠉⠉⣿⣿⣿⣿⣿⠿⠿⠿⠿⢿⣿⣿⣿⣿⣿⠀⠀⠀⠀
 ⠀⢿⣿⣿⣿⠇⠀⠀⠻⣿⣿⣿⠏⠀⠀⠀⠀   ⠿⣿⣿⣿⠇⠀
         """)
-    globs.log("MOO", "- version 0.4", color=GREEN)
+    globs.log("MOO", "- version 0.5", color=GREEN)
     path = args[0]
     system_context = Context("MOO")
     system_context["moo.safe"] = Region()
