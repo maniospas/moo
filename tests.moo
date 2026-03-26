@@ -5,8 +5,8 @@
 
 /**/ print Running tests
 /**/ system {moo.python} moo.py examples/hello.txt.moo --nocolor
-/**/ for i range 1 7: system {moo.python} moo.py examples/file{i}.txt.moo --nocolor
+/**/ for i=range 1 7: system {moo.python} moo.py examples/file{i}.txt.moo --nocolor
 
 /**/ print Cleanup 
 /**/ system rm examples/hello.txt
-/**/ for i range 1 7: system rm examples/file{i}.txt
+/**/ for i=range 1 7: system rm examples/file{i}.txt

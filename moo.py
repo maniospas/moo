@@ -352,6 +352,10 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 pos += 1
                 while pos<num_tokens and tokens[pos].isspace(): 
                     pos += 1
+                assert tokens[pos]=="=", "missing `=`\nThe syntax for `for` loops is `for varnmae=region: expression"
+                pos += 1
+                while pos<num_tokens and tokens[pos].isspace(): 
+                    pos += 1
                 context.token_pos = pos
                 depth = 0
                 block_end = pos
@@ -363,11 +367,13 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 prev_pos = pos+1
                 context.token_pos = prev_pos
                 iterator, pos = parse_block(globs, tokens, context, pos, block_end)
-                assert isinstance(iterator, Region), "for loops need regions to be returned by {}"
+                if isinstance(iterator, Region): iterator = iterator.contents
+                else: iterator = [iterator]
+                #assert isinstance(iterator, Region), "for loops need to retrieve variables from regions"
                 prev_pos = pos+1
                 context.token_pos = prev_pos
                 returned = Region()
-                for value in iterator.contents:
+                for value in iterator:
                     context.vars[varname] = value
                     newvalue, _ = parse_block(globs, tokens, context, pos+1, num_tokens)
                     returned.push(newvalue)
