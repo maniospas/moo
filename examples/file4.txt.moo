@@ -1,10 +1,10 @@
-/**/ SPACE1: x = const first value
-/**/ SPACE1: y = const second value
-/**/ SPACE1: z = const third value
+/**/ SPACE1: x = str first value
+/**/ SPACE1: y = str second value
+/**/ SPACE1: z = str third value
 
 /**/ do {SPACE1: moolog}
 
 /*** moolog ***/
-/*** const {x} imported ***/
-/*** const {y} imported ***/
-/*** const {z} imported ***/
+/*** str {x} imported ***/
+/*** str {y} imported ***/
+/*** str {z} imported ***/

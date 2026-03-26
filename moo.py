@@ -100,7 +100,7 @@ class Context:
         existing = self.vars.get(name, None)
         if existing: 
             assert isinstance(existing, Region), "Can append but not reassign to list: "+name
-            assert isinstance(value, Command)==isinstance(existing, Command), "Conflicting variable type (command vs const): "+name
+            assert isinstance(value, Command)==isinstance(existing, Command), "Conflicting variable type (command vs str): "+name
             if not isinstance(value, Command): assert value == existing, "Cannot overwrite previously different variable: "+name
             else: assert value.expression == existing.expression, "Cannot overwrite previously different variable: "+name
             return
@@ -252,7 +252,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
             if token=="moolog":
                 ret = Region()
                 for var, value in context.vars.items():
-                    ret.push("/**/ " + var + " = const " + value)
+                    ret.push("/**/ " + var + " = str " + value)
                 return ret, num_tokens+1
             return context[token], num_tokens+1
         returned = ""
@@ -309,7 +309,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
                 context.token_pos = prev_pos
                 returned = load_file(globs, returned, context)
-            elif token=="const":
+            elif token=="str":
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
             elif token=="hide":
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
@@ -342,6 +342,25 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                     assert not context.parent.parent or var.permits(returned), "the moo.safe list can only be edited from the main context but a dependent file tried to append contents that do not already exist: "+returned
                 var.push(returned)
                 returned = ""
+            elif token=="if":
+                prev_pos = context.token_pos
+                pos += 1
+                while pos<num_tokens and tokens[pos].isspace(): 
+                    pos += 1
+                depth = 0
+                block_end = pos
+                while block_end<num_tokens:
+                    if tokens[block_end]=="{": depth += 1
+                    if tokens[block_end]=="}": depth -= 1
+                    if depth==0 and tokens[block_end]==":": break
+                    block_end += 1
+                prev_pos = pos+1
+                context.token_pos = prev_pos
+                comparison, pos = parse_block(globs, tokens, context, pos, block_end)
+                assert comparison in ["True", "False"], "conditions can only be True or False"
+                if comparison == "True":
+                    returned, _ = parse_block(globs, tokens, context, pos+1, num_tokens)
+                pos = num_tokens+1 
             elif token=="for":
                 prev_pos = context.token_pos
                 pos += 1
@@ -422,9 +441,9 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 new_tokens = [p for p in new_raw_parts if p != ""]+tokens[pos+1:num_tokens]
                 context.token_pos = prev_pos
                 returned, _ = parse_block(globs, new_tokens, context)
-            elif token=="{": raise Exception("cannot start a {} block here\n      Expecting a function or variable name.\n      Perhaps you meant to preface it with `do` or `const`?")
+            elif token=="{": raise Exception("cannot start a {} block here\n      Expecting a function or variable name.\n      Perhaps you meant to preface it with `do` or `str`?")
             elif token==":": raise Exception("missing namespace name before :\nIf you did not write this yourself, this error may occur due to unresolved placeholders.")
-            else: raise Exception("unknown instruction: "+token+"\n      Perhaps you meant to preface it with `const`?")
+            else: raise Exception("unknown instruction: "+token+"\n      Perhaps you meant to preface it with `str`?")
             pos += 1
         return returned, pos
     except Exception as e:

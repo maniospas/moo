@@ -1,6 +1,6 @@
 /*** reg = 
-    /**/const my 
-    /**/const name 
-    /**/const is
+    /**/str my 
+    /**/str name 
+    /**/str is
 ***/
 /**/ reg

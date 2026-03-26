@@ -1,1 +1,1 @@
-Hello /***const {user}***/ from a linux file!
+Hello /***str {user}***/ from a linux file!

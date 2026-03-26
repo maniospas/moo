@@ -2,9 +2,10 @@
 
 *No configuration files! Only your code and the MOO-NOLITH.*
 
-This project was created because, monoliths are lightweight,
-separation of concerns is great, and splitting configuration
-from code is pesky (source: me). 
+This project was created because I think three contradictory things
+hold true: monoliths are lightweight,
+separation of concerns is great,
+and splitting configuration from code is pesky.
 
 Thus you can use *moo*; a tiny build system that inlines
 external configurations as well as allowing packaging 
@@ -27,9 +28,11 @@ Some of the things you can do by inlining some moo code in your files:
 
 ### MOO - 0.5 (nightly build)
 - Loops
+- Conditions
+- Renamed *const* to *str*
 
 ### MOO - 0.4 (26 March 2026)
-- First stable version (changelog starts tracking from hereon)
+- First stable core (changelog starts tracking from hereon)
 - Test suit
 
 ## 🚀 Quickstart
@@ -101,6 +104,11 @@ Declare a list like below, and append text to it. Lists are empty by default.
 <body>/***BODY***/</body>
 ```
 
+**For** loops and temporary variables can be declared with the syntax `for varname=value: code`. This works two ways: if value is a list, the code is executed for each element
+of the list while substituting `varname` with that value within the code. Otherwise, the value is treated like a list of one element. `varname` must not be in use before running
+this (though you can run it an namespace) and it is not in use afterwards. The result is a line-separated list containing all values.
+
+
 **Placeholders** are means of not evaluating a list (only a list!) immediately but at the latest possible moment to let it accrue more content.Usually that place is the end of the file, but placeholders are also re-evaluated for the inputs of `do` statements. Here is an example:
 
 ```c
@@ -118,7 +126,11 @@ Some of available scripts are:
 
 - *scripts/b64.py* converts a file to base64 encoding.
 
-**Safety.** In general, use `command` to run specific external commands. The `moo.safe` variable determines how the command
+In general, use `system` to run specific operating system commands. Those boot up in their own processes and run asynchronously. Their stdout is fed
+back to *moo* scripts, but only when there is need to convert those to strings. Commands outputs are cached. For example, if you spawn system commands
+in a `for` loop, these do not block each other and are synchronized if you `hide` or normally inline the result.
+
+**Safety.** The `moo.safe` variable determines how the command
 can be prefixed. A common default is `/*** moo.safe += {moo.python} scripts/ ***/` for allowing all contents of the *scripts/* folder
 to be called by Python while preventing all other programs AND Python from being executed with code injection attacks. The assumption
 is that you trust whitelisted commands and folder combinations.

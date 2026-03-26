@@ -1,6 +1,6 @@
 Hi!
-/**/ moo.safe += const {moo.python} scripts/
+/**/ moo.safe += str {moo.python} scripts/
 /**/ os = system {moo.python} scripts/os.py
-/**/ user = const maniospas
+/**/ user = str maniospas
 /**/ import examples/hello.{os}.txt.moo
 - Be safe out there.
