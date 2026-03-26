@@ -1,6 +1,4 @@
-/**/ list = region
-/**/ list += a
-/**/ list += b
-/**/ list += c
-/**/ list2 = for i in {list} eval {i}+"_prefix"
-/*** list2 ***/
+/**/ x = region {moo.symbols.line}
+/**/ placeholder x
+This is something placed after the placeholder.
+/**/ x += const This is placed at the beginning.

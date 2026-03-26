@@ -15,8 +15,6 @@ everything is inlined in your code.
 **Author:** Emmanouil Krasanakis (maniospas@hotmail.com)<br>
 **License:** Apache 2.0
 
-![examples/example.png](examples/example.png)
-
 ## 🚀 Quickstart
 
 Install Python 3.11 or later and download *moo.py*. You can optionally get some useful *scripts/* too.
@@ -50,15 +48,15 @@ Assignments do not propagate the value.
 ```c
 // hello.txt.moo
 Hi!
-/**/ moosafe += const {python} scripts/
-/**/ os = system {python} scripts/os.py
+/**/ moo.safe += const {moo.python} scripts/
+/**/ os = system {moo.python} scripts/os.py
 /**/ user = const maniospas
 /**/ import hello.{os}.txt.moo
 - Be safe out there.
 ```
 
 The builtins shown above are:
-- `+=` adds some data to a list of values. In this case, `moosafe` determines allowed system command prefixes. More on lists and safety later.
+- `+=` adds some data to a list of values. In this case, `moo.safe` determines allowed system command prefixes. More on lists and safety later.
 - `system` runs a system command and captures its console output. These are scheduled as parallel processes, cached, and execute lazily. If you want to forcefully synchronize them, use `pass {variable}` to force them to evaluate and then be ignored.
 - `const` acknowledges the rest of the text as a constant value
 - `import` inlines another file. Imported files can access and shadow the variables of their callers.
@@ -81,16 +79,25 @@ Hello world from a linux file!
 
 **Variables** are immutable and inherited from where your code is included. But you can locally shadow external names. Variable names are independent of the rest of your file.
 
-**Regions** are essentially lists of values that are placed together at specific segments of your code. For example, you may have separate regions for your html style, script, and body. Declare a region like below, and append text to it. Regions are empty
-by default.
+**Regions** are essentially lists of values that can be viewed as one huge string with a given separator between its segments. 
+For example, you may have separate regions for your html style, script, and body. Declare a region like below, and append text to it. Regions are empty by default.
 
 ```c
-/**/ BODY = region
+/**/ BODY = region {moo.symbols.line}
 /**/ BODY += this will show in the body
 <body>/***BODY***/</body>
 ```
 
-**Scripts.** In addition to *moo.py*, which is a self-contained implementation for running the language without any dependencies or virtual environment, you can also get a collection of pre-installed scripts that leverage Python's impressive standard library. You can reference the python executable with the `{python}` variable in your commands.
+**Placeholders** are means of not evaluating a region (only a region!) immediately but at the latest possible moment to let it accrue more content.Usually that place is the end of the file, but placeholders are also re-evaluated for the inputs of `do` statements. Here is an example:
+
+```c
+/**/ x = region {moo.symbols.line}
+/**/ placeholder x
+This is something placed after the placeholder.
+/**/ x += const This is placed at the beginning.
+```
+
+**Scripts.** In addition to *moo.py*, which is a self-contained implementation for running the language without any dependencies or virtual environment, you can also get a collection of pre-installed scripts that leverage Python's impressive standard library. You can reference the python executable with the `{moo.python}` variable in your commands.
 
 Some of available scripts (the list is growing) are:
 
@@ -98,8 +105,8 @@ Some of available scripts (the list is growing) are:
 
 - *scripts/b64.py* converts a file to base64 encoding.
 
-**Safety.** In general, use `command` to run specific external commands. The `moosafe` variable determines how the command
-can be prefixed. A common default is `/*** append moosafe {python} scripts/ ***/` for allowing all contents of the *scripts/* folder
+**Safety.** In general, use `command` to run specific external commands. The `moo.safe` variable determines how the command
+can be prefixed. A common default is `/*** append moo.safe {moo.python} scripts/ ***/` for allowing all contents of the *scripts/* folder
 to be called by Python while preventing all other programs AND Python from being executed with code injection attacks. The assumption
 is that you trust whitelisted commands and folder combinations.
 
@@ -118,8 +125,8 @@ appropriate argument. UYou can declare such helpers at the top level and have th
 shared in imported *moo* files.
 
 ```c
-/**/ append moosafe {python} scripts/
-/**/ b64 = const system {python} scripts/b64.py
+/**/ append moosafe {moo.python} scripts/
+/**/ b64 = const system {moo.python} scripts/b64.py
 /**/ b64
 /**/ do {b64} examples/file1.txt.moo
 ```
@@ -156,7 +163,7 @@ to valid code when replaced with anything.
 
 ```c
 // src/main.c.moo
-///**/ COMPILE: append moosafe gcc
+///**/ COMPILE: moo.safe += gcc
 ///**/ COMPILE: enabled {eval "--compile" in {mooargs}}
 ///**/ COMPILE: schedule gcc -Wall -O3 -o lettuce src/main.c
 

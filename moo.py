@@ -71,6 +71,12 @@ class Context:
         self.tokens = list()
         self.token_pos = 0
 
+    def non_shared_parent(self):
+        if self.shared_namespaces:
+            if not self.parent: return None
+            return self.parent.non_shared_parent()
+        return self
+
     def update(self, row, col):
         self.row = row
         self.col = col
@@ -81,6 +87,7 @@ class Context:
         return namespace
 
     def get_namespace(self, name: str):
+        assert name!=":", ":: is not a valid namespace declaration\nIf you did not write this yourself, this error may occur due to unresolved placeholders."
         namespace = self.namespaces.get(name, None)
         if namespace is None and self.parent and self.shared_namespaces: namespace = self.parent.get_existing_namespace(name)
         if namespace is not None: return namespace
@@ -128,7 +135,7 @@ class Globals:
     
     def create_temp(self):
         self.temp_counter += 1
-        return "__"+str(temp_counter)
+        return "temp"+str(self.temp_counter)
 
     def log(self, kind: str, message: str, color=CYAN):
         if self.log_enabled: print(color+kind+RESET, message, file=sys.stderr)
@@ -266,7 +273,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 returned, pos = parse_block(globs, block, namespace, pos, num_tokens)
                 assert pos>=num_tokens-1, "leftover code after namespace ends"
             elif pos<num_tokens-2 and tokens[pos+1]=="=":
-                assert token!="moosafe", "the moosafe region cannot be shadowed because it holds permissions"
+                assert token!="moo.safe", "the moo.safe region cannot be shadowed because it holds permissions"
                 returned, pos = parse_block(globs, block, context, pos+2, num_tokens)
                 context[token] = returned
                 returned = ""
@@ -290,10 +297,10 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 prev_pos = context.token_pos
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
                 returned = str(returned)
-                moosafe = context.get_raw_item("moosafe")
+                moosafe = context.get_raw_item("moo.safe")
                 context.token_pos = prev_pos
                 assert ".." not in returned, ".. cannot be part of commands, as they could escape the safety sandbox: "+returned+"\nPerhaps use the path command to turn relative paths to absolute ones."
-                assert moosafe.permits(returned), "moosafe does not permit command: "+returned+"\nConsider appending its prefix to the moosafe variable. Example: append moosafe {python} to allow python execution"
+                assert moosafe.permits(returned), "moo.safe does not permit command: "+returned+"\nConsider appending its prefix to the moo.safe variable. Example: append moo.safe {python} to allow python execution"
                 returned = globs.command(returned, context=context)
             elif token=="import":
                 prev_pos = context.token_pos
@@ -309,10 +316,10 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 prev_pos = context.token_pos
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
                 returned = str(returned)
-                moosafe = context.get_raw_item("moosafe")
+                moo.safe = context.get_raw_item("moo.safe")
                 context.token_pos = prev_pos
                 assert ".." not in returned, ".. cannot be part of commands, as they could escape the safety sandbox: "+returned+"\nPerhaps use the path command to turn relative paths to absolute ones."
-                assert moosafe.permits(returned), "moosafe does not permit system command: "+returned+"\nConsider appending its prefix to the moosafe variable. Example: append moosafe {python} to allow python execution"
+                assert moo.safe.permits(returned), "moo.safe does not permit system command: "+returned+"\nConsider appending its prefix to the moo.safe variable. Example: append moo.safe {python} to allow python execution"
                 globs.schedule.append(str(returned))
                 returned = ""
             elif pos<num_tokens-2 and tokens[pos+1]=="+":
@@ -325,23 +332,42 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 while pos<num_tokens-1 and tokens[pos+1].isspace(): 
                     pos += 1
                 returned, pos = parse_block(globs, tokens, context, pos+1, num_tokens)
-                if varname=="moosafe":
-                    assert not context.parent.parent or var.permits(returned), "the moosafe region can only be edited from the main context but a dependent file tried to append contents that do not already exist: "+returned
+                if varname=="moo.safe":
+                    assert not context.parent.parent or var.permits(returned), "the moo.safe region can only be edited from the main context but a dependent file tried to append contents that do not already exist: "+returned
                 var.push(returned)
                 returned = ""
             elif token=="region":
-                pos += 1
-                returned = Region()
-                assert pos>=num_tokens-1, "leftover code after declaring region"
+                prev_pos = context.token_pos
+                returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens, variable_expansion_only=False)
+                context.token_pos = prev_pos
+                returned = str(returned)
+                returned = Region(returned)
+            elif token=="placeholder":
+                prev_pos = context.token_pos
+                returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens, variable_expansion_only=False)
+                context.token_pos = prev_pos
+                returned = context.get_raw_item(returned)
+                assert isinstance(returned, Region), "placeholders can only be regions"
+                application_context = context.non_shared_parent()
+                assert application_context, "failed to properly understand in which file to create the placeholder"
+                temp = "/***::"+globs.create_temp()+"::***/"
+                application_context[temp] = returned
+                returned = temp
             elif token=="do":
                 prev_pos = context.token_pos
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens, variable_expansion_only=False)
                 returned = str(returned)
+                # mini-resolution of placeholders
+                if "/***::" in returned:
+                    for var in context.vars:
+                        if var.startswith("/***::"):
+                            returned = returned.replace(var, str(context.vars[var]))
                 new_raw_parts = re.split(r'(\s+|:|\\+|/\*\*/|=|[{}])', returned.replace("\n", " ").strip())
                 new_tokens = [p for p in new_raw_parts if p != ""]+tokens[pos+1:num_tokens]
                 context.token_pos = prev_pos
                 returned, _ = parse_block(globs, new_tokens, context)
             elif token=="{": raise Exception("cannot start a {} block here\n      Expecting a function or variable name.\n      Perhaps you meant to preface it with `do` or `const`?")
+            elif token==":": raise Exception("missing namespace name before :\nIf you did not write this yourself, this error may occur due to unresolved placeholders.")
             else: raise Exception("unknown function: "+token+"\n      Perhaps you meant to preface it with `const`?")
             pos += 1
         return returned, pos
@@ -386,6 +412,9 @@ def load_file(globs: Globals, path: str, parent_context: Context=None):
                 if has_started: block += line[col_num]
                 else: new_contents += line[col_num]
                 col_num += 1
+    for var in context.vars:
+        if var.startswith("/***::"):
+            new_contents = new_contents.replace(var, str(context.vars[var]))
     return new_contents
 
 
@@ -413,13 +442,16 @@ if __name__ == "__main__":
 ⢸⣿⣿⣿⣿⡏⠉⠉⣿⣿⣿⣿⣿⠿⠿⠿⠿⢿⣿⣿⣿⣿⣿⠀⠀⠀⠀
 ⠀⢿⣿⣿⣿⠇⠀⠀⠻⣿⣿⣿⠏⠀⠀⠀⠀   ⠿⣿⣿⣿⠇⠀
         """)
-    globs.log("MOO", "- version 0.3", color=GREEN)
+    globs.log("MOO", "- version 0.4", color=GREEN)
     path = args[0]
     system_context = Context("MOO")
-    system_context["python"] = sys.executable
-    system_context["mooargs"] = str(args)
-    system_context["cwd"] = str(Path.cwd().resolve())
-    system_context["moosafe"] = Region()
+    system_context["moo.safe"] = Region()
+    system_context["moo.python"] = sys.executable
+    system_context["moo.args"] = str(args)
+    system_context["moo.cwd"] = str(Path.cwd().resolve())
+    system_context["moo.symbols.line"] = "\n"
+    system_context["moo.symbols.space"] = " "
+    system_context["moo.symbols.comma"] = ","
     processed = load_file(globs, path, system_context)
     if stream:
         print(processed)
@@ -430,5 +462,7 @@ if __name__ == "__main__":
         globs.error(str(moopath)+" is forbidden from overwriting itself")
     dst.write_text(processed, encoding="utf-8")
     globs.log("monolith", str(dst), color=GREEN)
+    if globs.schedule:
+        globs.log("schedule", "", color=GREEN)
     schedule = [globs.command(scheduled) for scheduled in globs.schedule]
     for scheduled in schedule: str(scheduled) # sync all
