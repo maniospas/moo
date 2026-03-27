@@ -425,7 +425,8 @@ is executed only if the checked expression is <code>True</code>.</p>
 <pre data-filename="list-usage.c" data-copy>
 <code class="language-c">/**/ testlist = list {moo.symbols.line}
 /**/ testlist += pattern el*
-/**/ if str {match testlist: element}: print
+Does the pattern match?
+/**/ if str {match testlist: element}: str matched!
 </code></pre>
 
 <p id="system"><b>System</b> commands can run with the command <code>system expression</code>. Similarly to other

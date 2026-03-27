@@ -266,7 +266,8 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
             if token=="moolog":
                 ret = Region()
                 for var, value in context.vars.items():
-                    ret.push("/**/ " + var + " = str " + value)
+                    if isinstance(value, Pattern): ret.push("/**/ " + var + " = pattern " + str(value))
+                    else: ret.push("/**/ " + var + " = str " + str(value))
                 return ret, num_tokens+1
             return context[token], num_tokens+1
         returned = ""
