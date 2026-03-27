@@ -1,0 +1,66 @@
+<p id="variables"><b>Variables</b> are created per <code>varname = command expression</code> and are immutable once created.
+Their name must start with a letter or underscore (_) and they can contain any such letter, number, underscore,
+or dot. Commands correspond to various means of computing values given an expression.
+The simplest one is interpretation as a string with <code>str</code> like so:</p>
+
+<pre data-copy><code class="language-c">/**/s = str Hi!
+/**/s</code></pre>
+
+<p>This just writes <i>Hi!</i> inside the resulting file; parsing just one variable as <i>moo</i> code
+in the second line replaces it with its string representation. All variables have such a representation.
+Setting a variable creates no text, but you can use the variable's name or simply the pattern <code>command expression</code>
+without any assignment to obtain text that is added to the file being parsed.
+</p>
+
+<p>Before expressions are processed by the command, they may resolve nested <i>moo</i> code encloded in
+brackets. For example, the following creates a set of line-separated values <i>1,2,3</i>
+(how the range works will be shown later) and replaces both the range and a new line symbol within
+the string being parsed.</p>
+
+<pre data-copy><code class="language-c">/**/s = str This is a range of values: {moo.symbols.line} {range 1 4}
+/**/s</code></pre>
+
+<p>
+When importing files, variables are inherited from their parents. However, variables other than
+<i>moo.safe</i> can be shadowed locally with different values. Some common variables that are supplied
+by default are presented below. What being a list means is covered next:</p>
+
+
+<table border="1" cellpadding="5" cellspacing="0" class="moo-table">
+  <thead>
+    <tr>
+      <th>Variable</th>
+      <th>Details</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>moo.args</code></td>
+      <td>Extra arguments passed to the language.</td>
+    </tr>
+    <tr>
+      <td><code>moo.cwd</code></td>
+      <td>The working directory from which the language was invoked.</td>
+    </tr>
+    <tr>
+      <td><code>moo.python</code></td>
+      <td>Absolute path to the running Python interpreter.</td>
+    </tr>
+    <tr>
+      <td><code>moo.safe</code></td>
+      <td>A <code>list</code> of whitelisted command prefixes (cannot be shadowed).</td>
+    </tr>
+    <tr>
+      <td><code>moo.symbols.line</code></td>
+      <td>New‑line character <code>\n</code>.</td>
+    </tr>
+    <tr>
+      <td><code>moo.symbols.comma</code></td>
+      <td>Comma character <code>,</code>.</td>
+    </tr>
+    <tr>
+      <td><code>moo.symbols.space</code></td>
+      <td>Space character.</td>
+    </tr>
+  </tbody>
+</table>

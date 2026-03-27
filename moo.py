@@ -309,6 +309,12 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
                 context.token_pos = prev_pos
                 returned = load_file(globs, returned, context)
+            elif token=="read":
+                prev_pos = context.token_pos
+                returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
+                context.token_pos = prev_pos
+                with open(returned, 'r') as file:
+                    returned = file.read()
             elif token=="str":
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
             elif token=="hide":
@@ -461,6 +467,7 @@ def load_file(globs: Globals, path: str, parent_context: Context=None):
     end_at_end_line = False
     with open(path) as file:
         for line_num, line in enumerate(file):
+            if line.startswith("🐮"): line = "/**/"+line[len("🐮"):]
             line_length = len(line)
             col_num = 0
             while col_num<line_length:

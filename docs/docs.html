@@ -1,0 +1,159 @@
+<!-- ====================== Built‑in Functions / Commands ====================== -->
+<p><b>Expressions.</b> MOO instructions can be used within other material so as to generate code and perform various tasks.
+To make the instructions distinct, they reside in lines starting with <code>/**/</code>. The general syntax is:</p>
+<code>/**/ [namespace:] NAME [operator] [operand] [command expression]</code>
+<p>Available operators are <code>=</code> for assigning a value to a name (creates a new local variable),</li>
+and <code>+=</code> for appending a value to an existing <code>list</code>.</p>
+<p>Executed instructions are replaced with their textual result, where operators yield empty text.
+Use <code>/*** code ***/</code> for multi-line blocks or inline replacement. Expressions following commands
+are interpreted as string literals whose <code>{code}</code> segments are also evaluated
+as expressions.</p>
+
+<table style="width:100%;border-collapse:collapse;">
+    <thead>
+        <tr style="background:#eee;">
+            <th style="padding:.5rem;">Command</th>
+            <th style="padding:.5rem;">Explanation</th>
+            <th style="padding:.5rem;">Syntax</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td style="padding:.5rem;"><code>const</code></td>
+            <td style="padding:.5rem;">Treat the expression as a constant string.</td>
+            <td style="padding:.5rem;"><code>const expression</code></td>
+        </tr>
+
+        <tr>
+            <td style="padding:.5rem;"><code>system</code></td>
+            <td style="padding:.5rem;">Run a system command lazily (cached, parallel). Returns the command's stdout as a string.</td>
+            <td style="padding:.5rem;"><code>var = system {command}</code></td>
+        </tr>
+
+        <tr>
+            <td style="padding:.5rem;"><code>import</code></td>
+            <td style="padding:.5rem;">Inline another <code>.moo</code> file. The imported file inherits the caller's variables and may shadow them.</td>
+            <td style="padding:.5rem;"><code>import filepath</code></td>
+        </tr>
+
+        <tr>
+            <td style="padding:.5rem;"><code>do</code></td>
+            <td style="padding:.5rem;">Expand a previously captured <code>const</code> (or any expression) and then evaluate the result as normal <code>moo</code> code.</td>
+            <td style="padding:.5rem;"><code>do block</code></td>
+        </tr>
+
+        <tr>
+            <td style="padding:.5rem;"><code>eval</code></td>
+            <td style="padding:.5rem;">Evaluate a Python expression at the moment of execution. Returns the expression's <code>repr</code> as a string.</td>
+            <td style="padding:.5rem;"><code>var = eval expression</code></td>
+        </tr>
+
+        <tr>
+            <td style="padding:.5rem;"><code>hide</code></td>
+            <td style="padding:.5rem;">Force evaluation of a lazy variable (or any expression) and discard the result. Useful for synchronising parallel <code>system</code> calls.</td>
+            <td style="padding:.5rem;"><code>hide expression</code></td>
+        </tr>
+
+        <tr>
+            <td style="padding:.5rem;"><code>schedule</code></td>
+            <td style="padding:.5rem;">Queue a system command to be executed *after* the final monolith file has been written. Commands run concurrently.</td>
+            <td style="padding:.5rem;"><code>schedule command</code></td>
+        </tr>
+
+        <tr>
+            <td style="padding:.5rem;"><code>list</code></td>
+            <td style="padding:.5rem;">Create a new empty list. Optional second argument defines the separator (default: empty string).</td>
+            <td style="padding:.5rem;"><code>list separator</code></td>
+        </tr>
+
+        <tr>
+            <td style="padding:.5rem;"><code>placeholder</code></td>
+            <td style="padding:.5rem;">Place a list here but only after gathering more contents (normally at the end of the file or right before a <code>do</code> expansion). Allows the list to gather more elements before it is turned into a string.</td>
+            <td style="padding:.5rem;"><code>placeholder LIST_NAME</code></td>
+        </tr>
+
+        <tr>
+            <td style="padding:.5rem;"><code>enabled</code></td>
+            <td style="padding:.5rem;">Whether to keep enabled the current namespace for the rest of the file. Once disabled, it cannot be re-enabled.</td>
+            <td style="padding:.5rem;"><code>NAMESPACE: enabled True/False</code></td>
+        </tr>
+        <tr>
+            <td style="padding:.5rem;"><code>path</code></td>
+            <td style="padding:.5rem;">Convert a path to absolute path.</td>
+            <td style="padding:.5rem;"><code>path: relative_path</code></td>
+        </tr>
+    </tbody>
+</table>
+
+
+<!-- ====================== Safety ====================== -->
+<h3 id="safety">Safety</h3>
+<p>Only commands whose **prefix** matches an entry in <code>moo.safe</code> may be executed. This whitelist is hierarchical: a child file may only add entries that are a **subset** of the caller’s whitelist.</p>
+<p>Typical whitelisting for scripts shipped with the project:</p>
+<pre data-filename="whitelist-example.c" data-copy>
+<code class="language-c">/**/ moo.safe += {moo.python} scripts/</code>
+</pre>
+<p>When a command is attempted, <code>moo</code> checks that the command string starts with one of the safe prefixes. If it does not, the build aborts with a clear error message.</p>
+<p>Additional safety notes:</p>
+<ul>
+    <li>Relative “..” segments are rejected in whitelisted prefixes to avoid directory‑escape attacks. Convert to absolute paths when necessary.</li>
+    <li>The built‑in <code>eval</code> is **unsafe** and should be avoided in production code; it executes arbitrary Python.</li>
+    <li>Appending to <code>moo.safe</code> from a child file is only accepted if the caller already permits a superset of the requested prefixes.</li>
+</ul>
+
+<!-- ====================== Scripts ====================== -->
+<h3>Scripts</h3>
+<p>The repository ships a handful of ready‑made helpers that can be called via the <code>{moo.python}</code> variable:</p>
+<ul>
+    <li><code>scripts/os.py</code> – prints the host operating system (Linux, Windows, macOS).</li>
+    <li><code>scripts/b64.py</code> – reads a file given as the first argument and prints its Base64 representation.</li>
+</ul>
+
+<p>You can add more scripts to the <code>scripts/</code> directory; as long as the directory is whitelisted, they can be invoked with <code>system {moo.python} scripts/your_script.py</code>.</p>
+
+<!-- ====================== Reusable helpers ====================== -->
+<h3>Reusable helpers</h3>
+<p>Define a helper once (often as a <code>const</code> that captures a command) and reuse it anywhere you import the file. The helper inherits the current whitelist.</p>
+<pre data-filename="reuse-helper.c" data-copy>
+<code class="language-c">/**/ moo.safe += {moo.python} scripts/
+/**/ b64 = const system {moo.python} scripts/b64.py
+/**/ b64                # prints the command that will be run (for debugging)
+/**/ do {b64} examples/file1.txt.moo   # actually runs the b64 conversion</code>
+</pre>
+
+<!-- ====================== Namespaces ====================== -->
+<p><b>Namespaces</b> let you group related statements and optionally disable the whole group at runtime.
+In particular, if the <code>enabled</code> condition evaluates to <code>False</code>, all statements in that namespace
+are ignored for the rest of the file. A disabled namespace cannot be re‑enabled later.
+</p>
+<pre data-filename="src/main.c.moo" data-copy>
+<code class="language-c">// src/main.c.moo
+///**/ COMPILE: moo.safe += gcc
+///**/ COMPILE: enabled {eval "--compile" in {moo.args}}
+///**/ COMPILE: schedule gcc -Wall -O3 -o lettuce src/main.c
+
+#include &lt;stdio.h&gt;
+
+int main() {
+printf("Hello world!\n");
+return 0;
+}</code>
+</pre>
+
+<!-- ====================== CLI Options ====================== -->
+<h3>Command‑line interface</h3>
+<p>Run the interpreter from a terminal:</p>
+<pre data-filename="cli-help.sh" data-copy>
+<code class="language-bash">python3 moo.py [options] file.moo
+
+Options:
+--stream     Stream the output to the console.
+--nocolor    Do not colorize results with ANSI.
+</code></pre>
+<p>All extra arguments are stored in <code>moo.args</code> and can be inspected with <code>eval</code> or in a condition.</p>
+
+<!-- ====================== Errors ====================== -->
+<p><b>Errors.</b> If something fails, <strong>moo</strong> aborts and prints a stack trace that points to the start of the offending <code>/**/</code> block, including line/column numbers inside nested <code>{}</code> expressions. System‑command failures are also reported with the original command line.</p>
+<p>Example error screenshot:</p>
+<p><img src="examples/example_error.png" alt="error example"
+        style="max-width:100%;border:1px solid #ddd;"></p>

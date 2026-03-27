@@ -1,0 +1,34 @@
+<p id="for"><b>For</b> statements can loop through list values.
+In particular, the syntax <code>for varname=command expression: code</code>
+sets <i>varname</i> as a loop variable that progressively assumes all elements in the list
+as values, and executes the internal code. That code can be assignments, system runs, etc.,
+but its goal can also be to yield values. This is because loop results are gathered into
+lists (empty text is skipped), as shown below:
+</p>
+<pre data-copy><code class="language-c">/**/numbers = for number=range 1 4: str - number {number}
+Here are some numbers:
+/**/numbers
+</code></pre>
+
+This yields:
+
+<pre data-copy><code class="language-c">Here are some numbers:
+- number 1
+- number 2
+- number 3</code></pre>
+
+
+<p>When creating loops, the loop variable must not exist (or you can guard it within namespaces explained later)
+and is removed afterwards. This is a convenient mechanism for also declaring temporary variables by considering
+them lists of one element, like below. Do note that command-expression pairs can be subsituted by just a variable
+name:</p>
+
+<pre data-copy><code class="language-c">/**/for one=str 1: str One is {one}.
+/**/x = str 42
+/**/for value=x: str The Answer is {value}.
+</code></pre>
+
+This yields:
+
+<pre data-copy><code class="language-c">One is 1.
+The Answer is 42.</code></pre>

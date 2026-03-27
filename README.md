@@ -65,9 +65,9 @@ of these concepts:
 ```c
 // hello.txt.moo
 Hi!
-/**/ moo.safe += const {moo.python} scripts/
+/**/ moo.safe += str {moo.python} scripts/
 /**/ os = system {moo.python} scripts/os.py
-/**/ user = const maniospas
+/**/ user = str maniospas
 /**/ import hello.{os}.txt.moo
 - Be safe out there.
 ```
@@ -75,7 +75,7 @@ Hi!
 Some basic concepts are demonstrated above:
 - `+=` adds some data to a list of values. In this case, `moo.safe` determines allowed system command prefixes. More on lists and safety later.
 - `system` runs a system command and captures its console output. These are scheduled as parallel processes, cached, and execute lazily. If you want to forcefully synchronize them, use `pass {variable}` to force them to evaluate and then be ignored.
-- `const` acknowledges the rest of the text as a constant string value.
+- `str` acknowledges the rest of the text as a constant string value.
 - `import` inlines another file. Imported files can access and shadow the variables of their callers.
 
 Now, when built on the linux platform with *python3 moo.py hello.txt.moo* the
@@ -90,122 +90,6 @@ Hello world from a linux file!
 ```
 
 
-## ⚡ About
+## ⚡ Documentation
 
-**Variables** are immutable and inherited from where your code is included. But you can locally shadow external names. Variable names are independent of the rest of your file.
-
-**Lists** of values that can be viewed as one huge string with a given separator between its segments. 
-For example, you may have separate lists for your html style, script, and body. 
-Declare a list like below, and append text to it. Lists are empty by default. 
-
-```c
-/**/ BODY = list {moo.symbols.line}
-/**/ BODY += this will show in the body
-<body>/***BODY***/</body>
-```
-
-**For** loops and temporary variables can be declared with the syntax `for varname=value: code`. This works two ways: if value is a list, the code is executed for each element
-of the list while substituting `varname` with that value within the code. Otherwise, the value is treated like a list of one element. `varname` must not be in use before running
-this (though you can run it an namespace) and it is not in use afterwards. The result is a line-separated list containing all values.
-
-
-**Placeholders** are means of not evaluating a list (only a list!) immediately but at the latest possible moment to let it accrue more content.Usually that place is the end of the file, but placeholders are also re-evaluated for the inputs of `do` statements. Here is an example:
-
-```c
-/**/ x = list {moo.symbols.line}
-/**/ placeholder x
-This is something placed after the placeholder.
-/**/ x += const This is placed at the beginning.
-```
-
-**Scripts.** In addition to *moo.py*, which is a self-contained implementation for running the language without any dependencies or virtual environment, you can also get a collection of pre-installed scripts that leverage Python's impressive standard library. You can reference the python executable with the `{moo.python}` variable in your commands.
-
-Some of available scripts are:
-
-- *scripts/os.py* tells you the operating system currently running. This often helps tailor to the local environment.
-
-- *scripts/b64.py* converts a file to base64 encoding.
-
-In general, use `system` to run specific operating system commands. Those boot up in their own processes and run asynchronously. Their stdout is fed
-back to *moo* scripts, but only when there is need to convert those to strings. Commands outputs are cached. For example, if you spawn system commands
-in a `for` loop, these do not block each other and are synchronized if you `hide` or normally inline the result.
-
-**Safety.** The `moo.safe` variable determines how the command
-can be prefixed. A common default is `/*** moo.safe += {moo.python} scripts/ ***/` for allowing all contents of the *scripts/* folder
-to be called by Python while preventing all other programs AND Python from being executed with code injection attacks. The assumption
-is that you trust whitelisted commands and folder combinations.
-
-You can try to append to the safety list from anywhere, but this action will
-be rejected unless the ENTRANT FILE allows a superset of permissions. This is done to achieve safety. Also `..` is not allowed
-within commands, so as to prevent escaping from the safety mechanism. If you want to use it, also use 
-path resolution everywhere to convert relative paths to absolute ones.
-
-**For now, `eval` remains unsafe.**
-
-**Reuse** moo code that is packed into `const` data like below. The `do` statement works by replacing nested
-statements with their expanded version and *then* properly interpreting the result. Interpretation occurs once only. 
-Under this pattern, the `const` declaration works like a capturing lambda expression as it resolves
-all its `{}` segments at the time of declaration. So, below we get to call the b64 Python script from with an 
-appropriate argument. You can declare such helpers at the top level and have them be
-shared in imported *moo* files.
-
-```c
-/**/ moo.safe += {moo.python} scripts/
-/**/ b64 = const system {moo.python} scripts/b64.py
-/**/ b64
-/**/ do {b64} examples/file1.txt.moo
-```
-
-This will create a file like the following (the middle b64 is used to demonstrate the exact command):
-
-```txt
-system /usr/bin/python3 scripts/b64.py
-LyoqKiB1c2VyID0gY29uc3Qgd29ybGQqKiovCi8qKiogZmlsZSA9IGltcG9ydCBleGFtcGxlL2Zp
-bGUyLntjb21tYW5kIHtweXRob259IHNjcmlwdHMvb3MucHl9LnR4dC5tb28gKioqLwovKioqIEJP
-RFkgPSByZWdpb24qKiovCi8qKiogYXBwZW5kIEJPRFkge2ZpbGV9ICoqKi8KCjxib2R5Pi8qKiog
-Qk9EWSAqKiovPC9ib2R5PgoK
-```
-
-**Namespaces** are also there to compartmentalize and enable/disable parts of files.
-To work within a namespace, prefix your instruction with `NAME:`, where *NAME* is its name.
-You can access all namespaces declared in the same file from within each other, 
-but *not* namespaces declared in other files, even if those files import the current one.
-What you *can* do is call another file within a namespace to adjust what information is passed 
-and return without polluting your *moo* code.
-The following example demonstrates usage of a namespace, alongside a list of final features:
-
-- `enabled` checks for a True or False value and correspondingly disables all future uses of the
-namespace in the file. Do note that namespaces in other files remain unaffected, even if they 
-have the same name. You can *not* re-enable a disabled namespace later.
-- `eval` evaluates a subsequent Python expression
-- `moo.args` is a string representation of additional arguments passed to the script.
-- `schedule` runs a system command after the monolith is created. Scheduled tasks run concurrently.
-
-Thus, if you run the following per `python3 moo.py src/main.c.moo --compile` it will compile the program.
-Do note the usage of `///**/` as a pattern that allows *moo* to appear commented by C tools but also evaluates
-to valid code when replaced with anything.
-
-
-```c
-// src/main.c.moo
-///**/ COMPILE: moo.safe += gcc
-///**/ COMPILE: enabled {eval "--compile" in {moo.args}}
-///**/ COMPILE: schedule gcc -Wall -O3 -o lettuce src/main.c
-
-#include <stdio.h>
-
-int main() {
-    printf("Hello world!\n");
-    return 0;
-}
-```
-
-**Error messages.** If something goes wrong, *moo* will create a stack trace
-of its failed attempt. Do note that that lines and columns refer to the start
-of *moo* blocks within your code. However, there is proper denotation of
-the exact point of failure, even within nested {} blocks or expanded expressions. 
-If system commands fail due to lazy execution,
-their initial declaration is pointed out. Here is an example.
-
-![examples/example_error.png](examples/example_error.png)
-
+Find language documentation [here]().
