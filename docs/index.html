@@ -221,6 +221,7 @@ p code{
             <a href="#variables">Vars</a>
             <a href="#lists">Lists</a>
             <a href="#for">For</a>
+            <a href="#patterns">Patterns</a>
             <a href="#system">System</a>
             <a href="#lambdas">Lambdas</a>
             <a href="#namespaces">Namespaces</a>
@@ -251,7 +252,7 @@ to reconcile its creator's three contradictory truths of software development: <
 
 <pre data-filename="run-example.sh" data-copy><code class="language-c">python3 moo.py examples/hello.txt.moo</code></pre>
 <pre data-filename="hello.txt.moo" data-copy><code class="language-c">Hi!
-/**/ moo.safe += str {moo.python} scripts/
+/**/ moo.safe += pattern {moo.python} scripts/*
 /**/ os = system {moo.python} scripts/os.py
 /**/ user = str world
 /**/ import examples/hello.{os}.txt.moo
@@ -349,15 +350,14 @@ by default are presented below. What being a list means is covered next:</p>
 
 <p id="lists"><b>Lists</b> hold an ordered collection of values created per <code>listname = list delimiter</code>.
 When a list is converted into text, for example via <code>/***listname***/</code>,
-its elements are joined using the delimiter declared upon list creation. Add to an element to  a list
-with the pattern <code>listname += command expression</code>, where the commands and expressions
+its elements are joined using the delimiter declared upon list creation. Add an element to  a list
+per <code>listname += command expression</code>, where the commands and expressions
 are the same to what you would use for variables.</p>
 
-<p>One special type of list are ranges, which are line-separated and
+<p>One special list type are ranges, which are line-separated and
 created per <code>range start end</code>, where the <i>start</i> is a first integer and <i>end</i>
 the range's end (non-inclusive). For example <code>range 1 4</code> creates a range
 with elements <code>1,2,3</code>.
-
 
 <p>In addition to direct conversion of lists to text, there is a mechanism to set
 placeholders in the text that are declared early but filled only when all
@@ -407,9 +407,31 @@ This yields:
 <pre data-copy><code class="language-c">One is 1.
 The Answer is 42.</code></pre>
 
+<p id="patterns"><b>Patterns</b> are text that contains some wildcard character regions, designated
+by *. Declaring a pattern is performed per <code>pattern expression</code> where the expression.
+</p>
+
+<p>Patterns, regular text, and lists all accept a matchin operation that compares them to some
+text value. Its syntax is <code>match query: expression</code> where the query is a query expression.
+If the query is normal text, this is an exact comparison. If it is a pattern, pattern compliance is
+checked. If it is a list, matching with at least one element is checked. The result is either <code>True</code>
+or <code>False</code>.
+</p>
+
+<p>An example of pattern matching is presented below, which also demonstrates the <code>if</code> command.
+This has a similar structure to loops, with the difference that the code after the double colons
+is executed only if the checked expression is <code>True</code>.</p>
+
+<pre data-filename="list-usage.c" data-copy>
+<code class="language-c">/**/ testlist = list {moo.symbols.line}
+/**/ testlist += pattern el*
+/**/ if str {match testlist: element}: print
+</code></pre>
+
 <p id="system"><b>System</b> commands can run with the command <code>system expression</code>. Similarly to other
 constructs, brackets inside expression are expanded into text. The <code>moo.safe</code> list
-determines allowed system command prefixes. Use <code>schedule expression</code> to run a system command <b>after</b>
+determines allowed system commands through an internal match operation.
+Use <code>schedule expression</code> to run a system command <b>after</b>
 generatinc the output file. Scheduled commands may, for example, call build processes on the resulting file.
 </p>
 
@@ -420,18 +442,18 @@ when converting the loop's outcome to text. As an example, below is <i>moo</i>'s
 </p>
 
 <pre data-filename="reuse-helper.c" data-copy>
-<code class="language-c">/**/ 🐮 moo.safe += str rm tests
-🐮 moo.safe += str rm examples/
-🐮 moo.safe += str {moo.python} moo.py examples/
-🐮 schedule rm tests
+<code class="language-c">/**/ moo.safe += str rm tests
+/**/ moo.safe += pattern rm examples/*
+/**/ moo.safe += pattern {moo.python} moo.py examples/*
+/**/ schedule rm tests
 
-🐮 print Running tests
-🐮 system {moo.python} moo.py examples/hello.txt.moo --nocolor
-🐮 str {for i=range 1 8: system {moo.python} moo.py examples/file{i}.txt.moo --nocolor}
+/**/ print Running tests
+/**/ system {moo.python} moo.py examples/hello.txt.moo --nocolor
+/**/ for i=range 1 8: system {moo.python} moo.py examples/file{i}.txt.moo --nocolor
 
-🐮 print Cleanup
-🐮 system rm examples/hello.txt
-🐮 str{for i=range 1 8: system rm examples/file{i}.txt}
+/**/ print Cleanup
+/**/ system rm examples/hello.txt
+/**/ for i=range 1 8: system rm examples/file{i}.txt
 </code></pre>
 
 <p id="lambdas"><b>Lambda</b> expressions can be defined to
@@ -451,10 +473,13 @@ Actually run the b64 conversion:
 In particular, if the <code>enabled</code> condition evaluates to <code>False</code>, all statements in that namespace
 are ignored for the rest of the file. A disabled namespace cannot be re‑enabled later.
 </p>
+<p>In the example below, a
+</p>
+
 <pre data-filename="src/main.c.moo" data-copy>
 <code class="language-c">// src/main.c.moo
+///**/ if str {in moo.args: str --compile}: enabled COMPILE
 ///**/ COMPILE: moo.safe += gcc
-///**/ COMPILE: enabled {eval "--compile" in {moo.args}}
 ///**/ COMPILE: schedule gcc -Wall -O3 -o lettuce src/main.c
 
 #include &lt;stdio.h&gt;

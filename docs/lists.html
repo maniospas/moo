@@ -1,14 +1,13 @@
 <p id="lists"><b>Lists</b> hold an ordered collection of values created per <code>listname = list delimiter</code>.
 When a list is converted into text, for example via <code>/***listname***/</code>,
-its elements are joined using the delimiter declared upon list creation. Add to an element to  a list
-with the pattern <code>listname += command expression</code>, where the commands and expressions
+its elements are joined using the delimiter declared upon list creation. Add an element to  a list
+per <code>listname += command expression</code>, where the commands and expressions
 are the same to what you would use for variables.</p>
 
-<p>One special type of list are ranges, which are line-separated and
+<p>One special list type are ranges, which are line-separated and
 created per <code>range start end</code>, where the <i>start</i> is a first integer and <i>end</i>
 the range's end (non-inclusive). For example <code>range 1 4</code> creates a range
 with elements <code>1,2,3</code>.
-
 
 <p>In addition to direct conversion of lists to text, there is a mechanism to set
 placeholders in the text that are declared early but filled only when all

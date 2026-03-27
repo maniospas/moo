@@ -29,6 +29,7 @@ Some of the things you can do by inlining some moo code in your files:
 ### MOO - 0.5 (nightly build)
 - Loops
 - Conditions
+- Patterns
 - Renamed *const* to *str*
 
 ### MOO - 0.4 (26 March 2026)

@@ -20,6 +20,7 @@
 /***read docs/variables.html***/
 /***read docs/lists.html***/
 /***read docs/for.html***/
+/***read docs/patterns.html***/
 /***read docs/system.html***/
 /***read docs/lambdas.html***/
 /***read docs/namespaces.html***/

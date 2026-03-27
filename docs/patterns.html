@@ -1,0 +1,20 @@
+<p id="patterns"><b>Patterns</b> are text that contains some wildcard character regions, designated
+by *. Declaring a pattern is performed per <code>pattern expression</code> where the expression.
+</p>
+
+<p>Patterns, regular text, and lists all accept a matchin operation that compares them to some
+text value. Its syntax is <code>match query: expression</code> where the query is a query expression.
+If the query is normal text, this is an exact comparison. If it is a pattern, pattern compliance is
+checked. If it is a list, matching with at least one element is checked. The result is either <code>True</code>
+or <code>False</code>.
+</p>
+
+<p>An example of pattern matching is presented below, which also demonstrates the <code>if</code> command.
+This has a similar structure to loops, with the difference that the code after the double colons
+is executed only if the checked expression is <code>True</code>.</p>
+
+<pre data-filename="list-usage.c" data-copy>
+<code class="language-c">/**/ testlist = list {moo.symbols.line}
+/**/ testlist += pattern el*
+/**/ if str {match testlist: element}: print
+</code></pre>

@@ -18,6 +18,15 @@ from pathlib import Path
 from typing import Any, Callable
 RED, GREEN, CYAN, YELLOW, RESET = "\x1b[31m", "\x1b[32m", "\x1b[36m", "\x1b[33m","\x1b[0m"
 
+class Pattern:
+    def __init__(self, contents):
+        assert "**" not in contents, "trying to create a pattern with two consecutive wildcards in item: "+contents+"\nThis is rejected for safety. Patterns are denoted with * within list items."
+        self.compiled = re.compile('^'+re.escape(contents).replace(r'\*', '.*')+'$')
+        self.contents = contents
+
+    def __str__(self):
+        return self.contents
+
 class Region:
     def __init__(self, sep="\n"):
         self.contents = list()
@@ -25,19 +34,24 @@ class Region:
     
     def push(self, contents):
         if contents: self.contents.append(contents)
-
-    def __resolve_contents(self):
-        for i in range(len(self.contents)): # do not allocate new list
-            self.contents[i] = str(self.contents[i])
     
     def __str__(self):
-        self.__resolve_contents()
-        return "\n".join(self.contents) if self.contents else ""
+        return "\n".join(str(content) for content in self.contents if str(content)) if self.contents else ""
+
+    def descriptive(self):
+        ret = ""
+        for contents in self.contents:
+            if isinstance(contents, Pattern): ret += "  pattern "+str(contents)
+            else: ret += "  str "+str(contents)
+            ret += "\n"
+        return ret
 
     def permits(self, value):
-        self.__resolve_contents()
         for contents in self.contents:
-            if value.startswith(contents): return True
+            if isinstance(contents, Pattern):
+                if contents.compiled.fullmatch(value): return True
+                continue
+            if str(contents)==value: return True
         return False
 
 class Command:
@@ -101,7 +115,7 @@ class Context:
         if existing: 
             assert isinstance(existing, Region), "Can append but not reassign to list: "+name
             assert isinstance(value, Command)==isinstance(existing, Command), "Conflicting variable type (command vs str): "+name
-            if not isinstance(value, Command): assert value == existing, "Cannot overwrite previously different variable: "+name
+            if not isinstance(value, Command): assert str(value) == str(existing), "Cannot overwrite previously different variable: "+name
             else: assert value.expression == existing.expression, "Cannot overwrite previously different variable: "+name
             return
         self.vars[name] = value
@@ -155,7 +169,7 @@ class Globals:
                 first_tok = ""
                 end_tok = ""
                 while start > 0:
-                    if "\n" in toks[start - 1]:
+                    if start<len(toks) and "\n" in toks[start - 1]:
                         first_tok = toks[start - 1].split("\n")[-1]
                         break
                     start -= 1
@@ -167,7 +181,7 @@ class Globals:
                 snippet = first_tok+"".join(toks[start:end])+end_tok
                 offset = sum(len(t) for t in toks[start:i])+len(first_tok)
                 print(RED + "  └─ " + RESET + snippet)
-                print(RED + "     " + " "*offset + "^"*len(toks[i])+RESET)
+                if i>=0 and i<len(toks): print(RED + "     " + " "*offset + "^"*len(toks[i])+RESET)
             context = context.parent
         sys.exit(1)
 
@@ -237,7 +251,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 if tokens[first_splitter] == "{": depth += 1
                 if tokens[first_splitter] == "}": depth -= 1
                 if tokens[first_splitter] == "/**/" and not depth: 
-                    ret.push(parse_block(globs, tokens, context, pos, first_splitter-1)[0])
+                    ret.push(str(parse_block(globs, tokens, context, pos, first_splitter-1)[0]))
                     first_splitter += 1
                     pos = first_splitter
                 first_splitter += 1
@@ -302,7 +316,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 moosafe = context.get_raw_item("moo.safe")
                 context.token_pos = prev_pos
                 assert ".." not in returned, ".. cannot be part of commands, as they could escape the safety sandbox: "+returned+"\nPerhaps use the path command to turn relative paths to absolute ones."
-                assert moosafe.permits(returned), "moo.safe does not permit command: "+returned+"\nConsider appending its prefix to the moo.safe variable.\nExample: `moo.safe+={moo.python}` allows python execution."
+                assert moosafe.permits(returned), "moo.safe does not permit command: "+returned+"\nConsider appending an appropriate pattern to the moo.safe variable.\nExample: moo.safe += pattern {moo.python} * to allow python execution.\nCurrent patterns:\n"+moosafe.descriptive()
                 returned = globs.command(returned, context=context)
             elif token=="import":
                 prev_pos = context.token_pos
@@ -317,6 +331,9 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                     returned = file.read()
             elif token=="str":
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
+            elif token=="pattern":
+                returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
+                returned = Pattern(returned)
             elif token=="hide":
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
                 returned = ""
@@ -331,7 +348,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 moosafe = context.get_raw_item("moo.safe")
                 context.token_pos = prev_pos
                 assert ".." not in returned, ".. cannot be part of commands, as they could escape the safety sandbox: "+returned+"\nPerhaps use the path command to turn relative paths to absolute ones."
-                assert moosafe.permits(returned), "moo.safe does not permit system command: "+returned+"\nConsider appending its prefix to the moo.safe variable. Example: append moo.safe {python} to allow python execution"
+                assert moosafe.permits(returned), "moo.safe does not permit schedule command: "+returned+"\nConsider appending its prefix to the moo.safe variable. Example: moo.safe += pattern {moo.python} * to allow python execution.\nCurrent patterns:\n"+moosafe.descriptive()
                 globs.schedule.append(str(returned))
                 returned = ""
             elif pos<num_tokens-2 and tokens[pos+1]=="+":
@@ -348,6 +365,29 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                     assert not context.parent.parent or var.permits(returned), "the moo.safe list can only be edited from the main context but a dependent file tried to append contents that do not already exist: "+returned
                 var.push(returned)
                 returned = ""
+            elif token=="match":
+                prev_pos = context.token_pos
+                pos += 1
+                while pos<num_tokens and tokens[pos].isspace():
+                    pos += 1
+                depth = 0
+                block_end = pos
+                while block_end<num_tokens:
+                    if tokens[block_end]=="{": depth += 1
+                    if tokens[block_end]=="}": depth -= 1
+                    if depth==0 and tokens[block_end]==":": break
+                    block_end += 1
+                prev_pos = pos+1
+                context.token_pos = prev_pos
+                contents, pos = parse_block(globs, tokens, context, pos, block_end)
+                if not isinstance(contents, Region):
+                    cont = Region()
+                    cont.push(contents)
+                    contents = cont
+                returned, _ = consume_block(globs, tokens, context, pos+1, num_tokens)
+                returned = str(returned)
+                returned = "True" if contents.permits(returned) else "False"
+                pos = num_tokens
             elif token=="if":
                 prev_pos = context.token_pos
                 pos += 1
@@ -366,7 +406,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 assert comparison in ["True", "False"], "conditions can only be True or False"
                 if comparison == "True":
                     returned, _ = parse_block(globs, tokens, context, pos+1, num_tokens)
-                pos = num_tokens+1 
+                pos = num_tokens
             elif token=="for":
                 prev_pos = context.token_pos
                 pos += 1
@@ -404,7 +444,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                     returned.push(newvalue)
                     context.token_pos = prev_pos
                 del context.vars[varname]
-                pos = num_tokens+1
+                pos = num_tokens
             elif token=="list":
                 prev_pos = context.token_pos
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)

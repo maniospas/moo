@@ -1,5 +1,5 @@
 Hi!
-/**/ moo.safe += str {moo.python} scripts/
+/**/ moo.safe += pattern {moo.python} scripts/*
 /**/ os = system {moo.python} scripts/os.py
 /**/ user = str world
 /**/ import examples/hello.{os}.txt.moo
