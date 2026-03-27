@@ -10,7 +10,7 @@ the range's end (non-inclusive). For example <code>range 1 4</code> creates a ra
 with elements <code>1,2,3</code>.
 
 
-<p>In addition to direct convesion of lists to text, there is a mechanism to set
+<p>In addition to direct conversion of lists to text, there is a mechanism to set
 placeholders in the text that are declared early but filled only when all
 list elements have been determined - mainly after parsing the whole file.
 The mechanism for doing so is demonstrated below:</p>
@@ -18,7 +18,7 @@ The mechanism for doing so is demonstrated below:</p>
 <code class="language-c">/**/ HEAD = list {moo.symbols.line}
 /**/ BODY = list {moo.symbols.line}
 &lt;head&gt;/*** {placeholder HEAD} ***/&lt;/head&gt;
-&lt;body&gt;/*** {placeholder BODY} ***/&lt;/body&gt;</code>
-/**/ HEAD += const &lt;title&gt;My page&lt;/title&gt;
+&lt;body&gt;/*** {placeholder BODY} ***/&lt;/body&gt;
+/**/ HEAD += str &lt;title&gt;My page&lt;/title&gt;
 /**/ BODY += Hello world!
-</pre>
+</code></pre>

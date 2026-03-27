@@ -1,0 +1,26 @@
+<p id="system"><b>System</b> commands can run with the command <code>system expression</code>. Similarly to other
+constructs, brackets inside expression are expanded into text. The <code>moo.safe</code> list
+determines allowed system command prefixes. Use <code>schedule expression</code> to run a system command <b>after</b>
+generatinc the output file. Scheduled commands may, for example, call build processes on the resulting file.
+</p>
+
+<p>System commands are executed concurrently in separate operating system processes; this is typically parallelized.
+They are both cached and synchronized with the rest of the code lazily, at the point when their string representations
+are needed. For example, using <code>for</code> loops to create command batches means that they are synchronized only
+when converting the loop's outcome to text. As an example, below is <i>moo</i>'s test suite that use this principle.
+</p>
+
+<pre data-filename="reuse-helper.c" data-copy>
+<code class="language-c">/**/ 🐮 moo.safe += str rm tests
+🐮 moo.safe += str rm examples/
+🐮 moo.safe += str {moo.python} moo.py examples/
+🐮 schedule rm tests
+
+🐮 print Running tests
+🐮 system {moo.python} moo.py examples/hello.txt.moo --nocolor
+🐮 str {for i=range 1 8: system {moo.python} moo.py examples/file{i}.txt.moo --nocolor}
+
+🐮 print Cleanup
+🐮 system rm examples/hello.txt
+🐮 str{for i=range 1 8: system rm examples/file{i}.txt}
+</code></pre>

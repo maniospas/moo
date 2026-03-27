@@ -2,7 +2,11 @@
 result inline. The pattern for this is <code>import filepath</code>. If you do not want to process the file
 but directly process its contents use <code>read filepath</code> instead.
 In either case, the language fundamentally lacks the ability to harm your data other than creating
-one explicit file and adding safety exceptions in main file that cannoy be expeanded upon by imported
+one explicit file and adding safety exceptions in main file that cannot be expanded upon by imported
 files.</p>
+
+<p>When parsing <i>moo</i> files, instructions can be used within other material so as to generate code and perform various tasks.
+To make the instructions distinct, they reside in lines starting with <code>/**/</code>.
+Use <code>/*** code ***/</code> for multi-line blocks or inline replacement.</p>
 
 

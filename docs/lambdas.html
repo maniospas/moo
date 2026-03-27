@@ -1,0 +1,12 @@
+<p id="lambdas"><b>Lambda</b> expressions can be defined to
+define a helper once and reuse it anywhere you import the file.
+The helper inherits the current whitelist.</p>
+
+<pre data-filename="reuse-helper.c" data-copy>
+<code class="language-c">/**/ moo.safe += {moo.python} scripts/
+/**/ b64 = str system {moo.python} scripts/b64.py
+Command to be run (for debugging):
+/**/ b64
+Actually run the b64 conversion:
+/**/ do {b64} examples/file1.txt.moo</code>
+</pre>

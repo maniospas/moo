@@ -1,4 +1,4 @@
-# 🐮 moo (moolang) 
+# 🐮 moo (moolang)
 
 *No configuration files! Only your code and the MOO-NOLITH.*
 
@@ -8,9 +8,9 @@ separation of concerns is great,
 and splitting configuration from code is pesky.
 
 Thus you can use *moo*; a tiny build system that inlines
-external configurations as well as allowing packaging 
-components into one file and avoid stuff like tens of API calls 
-for loading a web page or platform-dependent compilation macros. 
+external configurations as well as allowing packaging
+components into one file and avoid stuff like tens of API calls
+for loading a web page or platform-dependent compilation macros.
 
 Some of the things you can do by inlining some moo code in your files:
 
@@ -37,16 +37,16 @@ Some of the things you can do by inlining some moo code in your files:
 
 ## 🚀 Quickstart
 
-Install Python 3.11 or later and download *moo.py*. You can optionally get 
+Install Python 3.11 or later and download *moo.py*. You can optionally get
 some useful *scripts/* too.
 
-You can also install the *moolang* VSCODE extension to highlight *moo* files. 
-Alternate between the programming language in which you embed instructions and 
+You can also install the *moolang* VSCODE extension to highlight *moo* files.
+Alternate between the programming language in which you embed instructions and
 *moo* highlighting.
 
 Instructions are placed within your text or code.
 Below is an example, where `/*** code ***/` inlines that code.
-Use `/**/ code` for inlining that ends at the end of the current line 
+Use `/**/ code` for inlining that ends at the end of the current line
 (and skips the new line character). Do note that this creates an error
 because `user` is not declared anywhere yet.
 
@@ -56,10 +56,10 @@ Hello /*** user ***/ from a linux file!
 ```
 
 Inlined expressions either have the form `varname` to evaluate
-to a variable `varname = F text` or `F text`, where `F` is one 
-of the builtin functions. Before running, nested 
+to a variable `varname = F text` or `F text`, where `F` is one
+of the builtin functions. Before running, nested
 `{expressions}` are evaluated first.
-Variable names can contain dots. Here is a quick peek 
+Variable names can contain dots. Here is a quick peek
 of these concepts:
 
 ```c
@@ -92,4 +92,4 @@ Hello world from a linux file!
 
 ## ⚡ Documentation
 
-Find language documentation [here]().
+Find language documentation [here](https://moolang.netlify.app/).

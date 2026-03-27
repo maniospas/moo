@@ -18,9 +18,11 @@
 <section id="docs"><h2>📚 Docs</h2>
 /***read docs/import.html***/
 /***read docs/variables.html***/
-/***read docs/system.html***/
 /***read docs/lists.html***/
 /***read docs/for.html***/
+/***read docs/system.html***/
+/***read docs/lambdas.html***/
+/***read docs/namespaces.html***/
 </section>
 
     <footer>
