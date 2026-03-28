@@ -189,6 +189,7 @@ public:
     size_t token_num;
     unordered_map<string, Value*> vars;
     unordered_map<string, Context*> spaces;
+    bool wrapper;
     Context(string path, Context* parent, bool shared_namespaces=false): 
         row(0), col(0), 
         path(path), 
@@ -197,7 +198,8 @@ public:
         enabled(true),
         token_pos(0),
         tokens(nullptr),
-        token_num(0) {}
+        token_num(0),
+        wrapper(false) {}
     inline Context* non_shared_parent() {
         if(!shared_namespaces) return this;
         if(parent) return parent->non_shared_parent();
@@ -239,6 +241,7 @@ public:
         return nullptr;
     }
     Value* get(const string& name) const {
+        if(wrapper) return parent->get(name);
         if(name=="moo.log") {
             auto ss = ostringstream{};
             for(const auto& [var, val] : vars) ss<<"/**/ "<<var<<" = "<<val->type()<<" "<<val->str()<<"\n";
@@ -249,6 +252,7 @@ public:
         return it;
     }
     inline void set(const string& name, Value* value) {
+        if(wrapper) return parent->set(name, value);
         if(!value) return;
         if(name=="moo.log") moo_error("cannot overwrite moo.log", this);
         if(name=="moo.safe") moo_error("cannot shadow moo.log", this);
@@ -391,32 +395,6 @@ Value* parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size_t
         return colon;
     };
     skip_space(pos);
-    size_t first_split = pos;
-    int depth = 0;
-    while(first_split + 1 < num) {
-        if(raw[first_split] == "{") ++depth;
-        if(raw[first_split] == "}") --depth;
-        if(raw[first_split] == "/**/" && depth == 0) break;
-        ++first_split;
-    }
-    if (first_split + 1 < num && raw[first_split] == "/**/") {
-        auto reg = new Region();
-        if(first_split > pos) reg->push(parse_block(globs, raw, ctx, pos, first_split));
-        size_t cur = first_split + 1;
-        while(cur < num) {
-            size_t nxt = cur;
-            depth = 0;
-            while(nxt < num) {
-                if(raw[nxt] == "{") ++depth;
-                if(raw[nxt] == "}") --depth;
-                if(raw[nxt] == "/**/" && depth == 0) break;
-                ++nxt;
-            }
-            reg->push(parse_block(globs, raw, ctx, cur, nxt));
-            cur = nxt + 1;
-        }
-        return reg;
-    }
     if(pos == num - 1) {
         ctx->token_pos = pos;
         return ctx->get(raw[pos]);
@@ -549,11 +527,12 @@ Value* parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size_t
             if(searchStart!=expanded.cend()) new_toks.push_back(string(searchStart, expanded.cend()));
             auto new_tok_array = new string[new_toks.size()];
             for(size_t i=0;i<new_toks.size();++i) new_tok_array[i] = new_toks[i];
-            auto new_ctx = new Context(ctx->path, ctx);
-            new_ctx->tokens = new_tok_array;
-            new_ctx->token_num = new_toks.size();
-            new_ctx->token_pos = 0;
-            auto sub = parse_block(globs, new_tok_array, new_ctx, 0, new_toks.size());
+            auto backup_ctx = new Context(ctx->path, ctx);
+            backup_ctx->tokens = new_tok_array;
+            backup_ctx->token_num = new_toks.size();
+            backup_ctx->token_pos = 0;
+            backup_ctx->wrapper = true;
+            auto sub = parse_block(globs, new_tok_array, backup_ctx, 0, new_toks.size());
             return sub;
         }
         else if (raw[pos] == "=") {
@@ -587,6 +566,25 @@ Value* parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size_t
             auto val = consume_block(globs, raw, ctx, pos, num);
             globs.schedule.push_back(val);
             return EMPTY_STRING;
+        }
+        else if (tok == "/**/") {
+            --pos;
+            ctx->token_pos = pos;
+            auto reg = new Region();
+            while(pos < num) {
+                pos++;
+                size_t depth = 0;
+                while(pos < num) {
+                    if(raw[pos] == "{") ++depth;
+                    if(raw[pos] == "}") --depth;
+                    if(raw[pos] == "/**/" && !depth) break;
+                    ++pos;
+                }
+                reg->push(parse_block(globs, raw, ctx, ctx->token_pos+1, pos));
+                ctx->token_pos = pos;
+            }
+            if(reg->items.size()<=1) moo_error("'/**/' is allowed here only to designate the start of a list whose elements are separated by that symbol", ctx);
+            return reg;
         }
         else if (tok == "{") moo_error("unexpected '{", ctx);
         else moo_error("unexpected command: "+tok, ctx);

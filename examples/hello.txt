@@ -1,3 +1,0 @@
-Hi!
-Hello world from a linux file!
-- Be safe out there.

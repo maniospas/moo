@@ -2,12 +2,13 @@
 In particular, if the <code>enabled</code> condition evaluates to <code>False</code>, all statements in that namespace
 are ignored for the rest of the file. A disabled namespace cannot be re‑enabled later.
 </p>
-<p>In the example below, a
+<p>In the example below, a namespace is disabled based on the existence of a specific argument in the list of program arguments.
+For example, call the script below per <code>./moo main.c.moo --compile</code> to evoke its compilation process.
 </p>
 
 <pre data-filename="src/main.c.moo" data-copy>
 <code class="language-c">// src/main.c.moo
-///**/ if str {in moo.args: str --compile}: enabled COMPILE
+///**/ if ${match moo.args: $--compile}: enabled COMPILE
 ///**/ COMPILE: moo.safe += gcc
 ///**/ COMPILE: schedule gcc -Wall -O3 -o lettuce src/main.c
 
