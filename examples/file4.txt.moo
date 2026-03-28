@@ -1,10 +1,10 @@
-/**/ SPACE1: x = str first value
-/**/ SPACE1: y = str second value
-/**/ SPACE1: z = str third value
+/**/ SPACE1: x = $first value
+/**/ SPACE1: y = $second value
+/**/ SPACE1: z = $third value
 
-/**/ do {SPACE1: moolog}
+/**/ do {SPACE1: moo.log}
 
-/*** moolog ***/
-/*** str {x} imported ***/
-/*** str {y} imported ***/
-/*** str {z} imported ***/
+/*** moo.log ***/
+/*** ${x} imported ***/
+/*** ${y} imported ***/
+/*** ${z} imported ***/

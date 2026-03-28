@@ -177,6 +177,7 @@ class Globals:
                 while end < len(toks):
                     if "\n" in toks[end]:
                         last_tok = toks[end].split("\n", 1)[0]
+                        break
                     end += 1
                 snippet = first_tok+"".join(toks[start:end])+end_tok
                 offset = sum(len(t) for t in toks[start:i])+len(first_tok)
@@ -194,11 +195,11 @@ def consume_block(globs: Globals, tokens: list[str], context: Context, pos:int, 
     ret = ""
     while pos<num_tokens:
         token = tokens[pos]
-        if token=="|" and not ret.strip():
-            returned, pos = parse_block(globs, tokens, context, pos+1, num_tokens)
-            context.token_pos = pos
-            ret += str(returned)
-        elif token=="{":
+        # if token=="|" and not ret.strip():
+        #     returned, pos = parse_block(globs, tokens, context, pos+1, num_tokens)
+        #     context.token_pos = pos
+        #     ret += str(returned)
+        if token=="{":
             if variable_expansion_only: 
                 if pos<num_tokens-2 and tokens[pos+1]!="{" and tokens[pos+2] == "}":
                     returned = context[tokens[pos+1]]
@@ -230,7 +231,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
         if isinstance(block, list): tokens = block
         else:
             block = block.replace("\n", " ").strip()
-            raw_parts = re.split(r'(\s+|:|\\+|/\*\*/|=|\||[{}])', block)
+            raw_parts = re.split(r'(\s+|:|\\+|/\*\*/|/|=|\$|[{}])', block)
             tokens = [p for p in raw_parts if p != ""]
         if num_tokens is None: num_tokens = len(tokens)
         assert pos<num_tokens, "empty block\nPerhaps use pass _ to skip a moo line."
@@ -334,7 +335,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                 context.token_pos = prev_pos
                 with open(returned, 'r') as file:
                     returned = file.read()
-            elif token=="str":
+            elif token=="str" or token=="$":
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
             elif token=="pattern":
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
@@ -488,7 +489,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                     for var in context.vars:
                         if var.startswith("/***::"):
                             returned = returned.replace(var, str(context.vars[var]))
-                new_raw_parts = re.split(r'(\s+|:|\\+|/\*\*/|=|\||[{}])', returned.replace("\n", " ").strip())
+                new_raw_parts = re.split(r'(\s+|:|\\+|/\*\*/|/|=|\$|[{}])', returned.replace("\n", " ").strip())
                 new_tokens = [p for p in new_raw_parts if p != ""]+tokens[pos+1:num_tokens]
                 context.token_pos = prev_pos
                 returned, _ = parse_block(globs, new_tokens, context)

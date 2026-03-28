@@ -1,6 +1,6 @@
 /*** reg = 
-    /**/str my 
-    /**/str name 
-    /**/str is
+    /**/ $my 
+    /**/ $name 
+    /**/ $is
 ***/
 /**/ reg
