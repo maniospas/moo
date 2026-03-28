@@ -145,7 +145,7 @@ public:
 #endif
         if (!pipe) {
             string msg = "Cannot open pipe for command: " + expression;
-            throw runtime_error(msg);
+            moo_error(msg, context);
         }
         array<char, 4096> buffer{};
         string stdout_str;
@@ -240,9 +240,9 @@ public:
     }
     Value* get(const string& name) const {
         if(name=="moo.log") {
-            ostringstream ss;
+            auto ss = ostringstream{};
             for(const auto& [var, val] : vars) ss<<"/**/ "<<var<<" = "<<val->type()<<" "<<val->str()<<"\n";
-            return new String(ss.str());
+            return new String(move(ss.str()));
         }
         auto it = __unsafe_get(name);
         if(!it) moo_error("variable not found: "+name, this);
@@ -250,13 +250,13 @@ public:
     }
     inline void set(const string& name, Value* value) {
         if(!value) return;
-        if(name=="moo.log") throw runtime_error("cannot overwrite moo.log");
-        if(name=="moo.safe") throw runtime_error("cannot shadow moo.log");
+        if(name=="moo.log") moo_error("cannot overwrite moo.log", this);
+        if(name=="moo.safe") moo_error("cannot shadow moo.log", this);
         auto it = get_raw_item(name);
         if(it) {
-            if(it->type_id()!=value->type_id()) throw runtime_error("mismatching previous type for variable: "+name);
-            if(value->type_id()!=COMMAND_TYPE) {if(value->str()!=it->str()) throw runtime_error("mismatching previous value for variable: "+name);}
-            else if(((Command*)it)->expression!=((Command*)value)->expression) throw runtime_error("mismatching previous value for variable: "+name);
+            if(it->type_id()!=value->type_id()) moo_error("mismatching previous type for variable: "+name, this);
+            if(value->type_id()!=COMMAND_TYPE) {if(value->str()!=it->str()) moo_error("mismatching previous value for variable: "+name, this);}
+            else if(((Command*)it)->expression!=((Command*)value)->expression) moo_error("mismatching previous value for variable: "+name, this);
         }
         vars[name] = value;
     }
@@ -273,27 +273,27 @@ void moo_error(const string& message, const Context* context) {
         if(context->tokens) {
             auto toks = context->tokens;
             auto i = context->token_pos;
-            auto start = i;
-            auto first_tok = string{""};
-            auto end_tok = string{""};
-            while(start>0) {
-                auto pos = toks[start-1].rfind('\n');
-                if(pos!=string::npos) {
-                    first_tok  = toks[start-1].substr(pos + 1);
-                    break;   
-                }
-                start -= 1;
-            }
-            auto end = i;
-            while(end<context->token_num) {
-                auto pos = toks[start-1].find('\n');
-                if(pos!=string::npos) {
-                    end_tok = toks[end].substr(0, pos);
-                    break;
-                }
-                end += 1;
-            }
             if(i>=0 && i<context->token_num) {
+                auto start = i;
+                auto first_tok = string{""};
+                auto end_tok = string{""};
+                while(start>0) {
+                    auto pos = toks[start-1].rfind('\n');
+                    if(pos!=string::npos) {
+                        first_tok  = toks[start-1].substr(pos + 1);
+                        break;   
+                    }
+                    start -= 1;
+                }
+                auto end = i;
+                while(end<context->token_num) {
+                    auto pos = toks[end].find('\n');
+                    if(pos!=string::npos) {
+                        end_tok = toks[end].substr(0, pos);
+                        break;
+                    }
+                    end += 1;
+                }
                 auto snippet = RED+string{"   └─"}+RESET;
                 auto carret = string("     ");
                 snippet += first_tok;
@@ -345,11 +345,11 @@ bool extract_arg(vector<string>& args, const string& name) {
 }
 
 static const regex token_regex(R"((\s+|:|\\+|/\*\*/|/|=|\$|[{}]))");
-Value* parse_block(Globals&, string*, Context*, size_t, const size_t);
-string consume_block(Globals&, string*, Context*, size_t, const size_t);
+Value* parse_block(Globals&, string*, Context*, size_t, size_t);
+string consume_block(Globals&, string*, Context*, size_t, size_t);
 string load_file(Globals&, const string&, Context* =nullptr);
 
-string consume_block(Globals& globs, string* toks, Context* ctx, size_t pos, const size_t num) {
+string consume_block(Globals& globs, string* toks, Context* ctx, size_t pos, size_t num) {
     auto result = string{""};
     while(pos<num) {
         const string& tk = toks[pos];
@@ -376,6 +376,7 @@ string consume_block(Globals& globs, string* toks, Context* ctx, size_t pos, con
 }
 
 Value* parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size_t num) {
+    while(num>pos && raw[num-1].find_first_not_of(" \t\r\n") == string::npos) --num;
     if(pos >= num) moo_error("empty block", ctx);
     auto skip_space = [&](size_t& p) {while (p < num && raw[p].find_first_not_of(" \t\r\n") == string::npos) ++p;};
     auto find_next_colon = [&](size_t p) {
@@ -390,7 +391,6 @@ Value* parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size_t
         return colon;
     };
     skip_space(pos);
-    while(num>0 && raw[num-1].find_first_not_of(" \t\r\n") == string::npos) --num;
     size_t first_split = pos;
     int depth = 0;
     while(first_split + 1 < num) {
@@ -537,20 +537,16 @@ Value* parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size_t
         }
         else if (tok == "do") {
             ctx->token_pos = pos;
-            auto blk = consume_block(globs, raw, ctx, pos, num);
-            // after expanding placeholders, re‑tokenise and re‑parse
-            string expanded = blk;
-            vector<string> new_toks;
-            smatch m;
-            string::const_iterator searchStart(expanded.cbegin());
+            auto expanded = consume_block(globs, raw, ctx, pos, num);
+            auto new_toks = vector<string>{};
+            auto m = smatch{};
+            auto searchStart = string::const_iterator{expanded.cbegin()};
             while(regex_search(searchStart, expanded.cend(), m, token_regex)) {
-                if (m.prefix().length())
-                    new_toks.push_back(m.prefix());
+                if (m.prefix().length()) new_toks.push_back(m.prefix());
                 new_toks.push_back(m[0]);
                 searchStart = m.suffix().first;
             }
-            if (searchStart != expanded.cend())
-                new_toks.push_back(string(searchStart, expanded.cend()));
+            if(searchStart!=expanded.cend()) new_toks.push_back(string(searchStart, expanded.cend()));
             auto new_tok_array = new string[new_toks.size()];
             for(size_t i=0;i<new_toks.size();++i) new_tok_array[i] = new_toks[i];
             auto new_ctx = new Context(ctx->path, ctx);
