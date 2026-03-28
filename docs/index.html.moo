@@ -10,7 +10,7 @@
 </head>
 <body>
 
-/*** import docs/header.html ***/
+/***import docs/header.html***/
 
 <main>
 /***import docs/overview.html***/

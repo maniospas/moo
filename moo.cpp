@@ -345,13 +345,13 @@ bool extract_arg(vector<string>& args, const string& name) {
 }
 
 static const regex token_regex(R"((\s+|:|\\+|/\*\*/|/|=|\$|[{}]))");
-pair<Value*, size_t> parse_block(Globals&, string*, Context*, size_t, const size_t);
-pair<string, size_t> consume_block(Globals&, string*, Context*, size_t, const size_t);
+Value* parse_block(Globals&, string*, Context*, size_t, const size_t);
+string consume_block(Globals&, string*, Context*, size_t, const size_t);
 string load_file(Globals&, const string&, Context* =nullptr);
 
-pair<string, size_t> consume_block(Globals& globs, string* toks, Context* ctx, size_t pos, const size_t num) {
-    string result;
-    while (pos < num) {
+string consume_block(Globals& globs, string* toks, Context* ctx, size_t pos, const size_t num) {
+    auto result = string{""};
+    while(pos<num) {
         const string& tk = toks[pos];
         if (tk == "{") {
             size_t start = pos;
@@ -364,7 +364,7 @@ pair<string, size_t> consume_block(Globals& globs, string* toks, Context* ctx, s
                 }
                 ++pos;
             }
-            result += parse_block(globs, toks, ctx, start+1, pos).first->str();
+            result += parse_block(globs, toks, ctx, start+1, pos)->str();
             ++pos; // skip closing '}'
         } 
         else {
@@ -372,10 +372,10 @@ pair<string, size_t> consume_block(Globals& globs, string* toks, Context* ctx, s
             ++pos;
         }
     }
-    return {result, pos};
+    return result;
 }
 
-pair<Value*, size_t> parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, const size_t num) {
+Value* parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size_t num) {
     if(pos >= num) moo_error("empty block", ctx);
     auto skip_space = [&](size_t& p) {while (p < num && raw[p].find_first_not_of(" \t\r\n") == string::npos) ++p;};
     auto find_next_colon = [&](size_t p) {
@@ -390,6 +390,7 @@ pair<Value*, size_t> parse_block(Globals& globs, string* raw, Context* ctx, size
         return colon;
     };
     skip_space(pos);
+    while(num>0 && raw[num-1].find_first_not_of(" \t\r\n") == string::npos) --num;
     size_t first_split = pos;
     int depth = 0;
     while(first_split + 1 < num) {
@@ -399,8 +400,8 @@ pair<Value*, size_t> parse_block(Globals& globs, string* raw, Context* ctx, size
         ++first_split;
     }
     if (first_split + 1 < num && raw[first_split] == "/**/") {
-        Region* reg = new Region();
-        if(first_split > pos) reg->push(parse_block(globs, raw, ctx, pos, first_split).first);
+        auto reg = new Region();
+        if(first_split > pos) reg->push(parse_block(globs, raw, ctx, pos, first_split));
         size_t cur = first_split + 1;
         while(cur < num) {
             size_t nxt = cur;
@@ -411,14 +412,14 @@ pair<Value*, size_t> parse_block(Globals& globs, string* raw, Context* ctx, size
                 if(raw[nxt] == "/**/" && depth == 0) break;
                 ++nxt;
             }
-            reg->push(parse_block(globs, raw, ctx, cur, nxt).first);
+            reg->push(parse_block(globs, raw, ctx, cur, nxt));
             cur = nxt + 1;
         }
-        return {reg, num};
+        return reg;
     }
     if(pos == num - 1) {
         ctx->token_pos = pos;
-        return {ctx->get(raw[pos]), num};
+        return ctx->get(raw[pos]);
     }
 
     while(pos < num) {
@@ -430,56 +431,50 @@ pair<Value*, size_t> parse_block(Globals& globs, string* raw, Context* ctx, size
         skip_space(pos);
         if (tok == "enabled") {
             auto blk = consume_block(globs, raw, ctx, pos, num);
-            if (blk.first == "True") ctx->enabled = true;
-            else if (blk.first == "False") ctx->enabled = false;
+            if (blk == "True") ctx->enabled = true;
+            else if (blk == "False") ctx->enabled = false;
             else moo_error("enabled expects True/False", ctx);
-            pos = blk.second;
+            return EMPTY_STRING;
         }
         else if (tok == "path") {
             auto blk = consume_block(globs, raw, ctx, pos, num);
-            return {new String(path(blk.first).lexically_normal().string()), num};
+            return new String(path(blk).lexically_normal().string());
         }
         else if (tok == "system") {
             auto prev_pos = ctx->token_pos;
-            auto blk = consume_block(globs, raw, ctx, pos, num);
-            const string& cmd = blk.first;
+            auto cmd = consume_block(globs, raw, ctx, pos, num);
             ctx->token_pos = prev_pos;
             auto safe = dynamic_cast<Region*>(ctx->get("moo.safe"));
             if(cmd.find("..") != string::npos) moo_error("‘..’ not allowed in system command", ctx);
             if(!safe->match(cmd))
                 moo_error("command not permitted by 'moo.safe': "+cmd+"\n  Current permissions:"+safe->descriptive(), ctx);
-            return {globs.command(cmd, ctx), num};
+            return globs.command(cmd, ctx);
         }
         else if (tok == "import") {
             auto blk = consume_block(globs, raw, ctx, pos, num);
-            return {new String{load_file(globs, blk.first, ctx)}, num};
+            return new String{load_file(globs, blk, ctx)};
         }
         else if (tok == "read") {
             auto blk = consume_block(globs, raw, ctx, pos, num);
-            ifstream f(blk.first);
+            globs.log("    read", blk);
+            ifstream f(blk);
+            if(!f.is_open()) moo_error("failed to open file: "+blk, ctx);
             ostringstream ss;
             ss << f.rdbuf();
-            return {new String(ss.str()), num};
+            return new String(ss.str());
         }
-        else if (tok == "str" || tok == "$") {
-            auto blk = consume_block(globs, raw, ctx, pos, num);
-            return {new String(blk.first), num};
-        }
-        else if (tok == "pattern") {
-            auto blk = consume_block(globs, raw, ctx, pos, num);
-            return {new Pattern(blk.first), num};
-        }
+        else if (tok == "str" || tok == "$") return new String(consume_block(globs, raw, ctx, pos, num));
+        else if (tok == "pattern") return new Pattern(consume_block(globs, raw, ctx, pos, num));
         else if (tok == "print") {
-            auto blk = consume_block(globs, raw, ctx, pos, num);
-            cout << blk.first << endl;
-            pos = blk.second;
+            cout<<consume_block(globs, raw, ctx, pos, num)<<"\n";
+            return EMPTY_STRING;
         }
         else if (tok == "if") {
             auto colon = find_next_colon(pos);
-            auto cond = parse_block(globs, raw, ctx, pos, colon);
-            if (cond.first->str() == "True") return parse_block(globs, raw, ctx, colon+1, num);
-            else if(cond.first->str() != "False") moo_error("conditions can only be True/False", ctx);
-            return {EMPTY_STRING, num};
+            auto cond = parse_block(globs, raw, ctx, pos, colon)->str();
+            if(cond == "True") return parse_block(globs, raw, ctx, colon+1, num);
+            else if(cond!="False") moo_error("conditions can only be True/False", ctx);
+            return EMPTY_STRING;
         }
         else if(tok == "for") {
             string varname = raw[pos];
@@ -491,60 +486,60 @@ pair<Value*, size_t> parse_block(Globals& globs, string* raw, Context* ctx, size
             auto colon = find_next_colon(pos);
             auto iter_blk = parse_block(globs, raw, ctx, pos, colon);
             pos = colon+1;
-            auto iter_val = iter_blk.first;
+            auto iter_val = iter_blk;
             auto src = dynamic_cast<Region*>(iter_val);
             if(!src) {
                 src = new Region();
                 src->push(iter_val);
             }
-            Region* out = new Region();
+            auto out = new Region();
             for (auto* item : src->items) {
                 ctx->set(varname, item);
                 auto body = parse_block(globs, raw, ctx, pos, num);
-                out->push(body.first);
+                out->push(body);
                 ctx->remove(varname);
             }
-            return {out, num};
+            return out;
         }
         else if(tok == "match") {
             auto colon = find_next_colon(pos);
             auto iter_blk = parse_block(globs, raw, ctx, pos, colon);
             pos = colon+1;
-            auto iter_val = iter_blk.first;
+            auto iter_val = iter_blk;
             skip_space(pos);
             auto value = consume_block(globs, raw, ctx, pos, num);
-            if(iter_val->match(value.first)) return {TRUE_STRING, num};
-            return {FALSE_STRING, num};
+            if(iter_val->match(value)) return TRUE_STRING;
+            return FALSE_STRING;
         }
         else if (tok == "list") {
             auto blk = consume_block(globs, raw, ctx, pos, num);
-            Region* r = new Region();
-            r->push(new String(blk.first));
-            return {r, num};
+            auto r = new Region();
+            r->push(new String(blk));
+            return r;
         }
         else if (tok == "range") {
             auto blk = consume_block(globs, raw, ctx, pos, num);
-            istringstream ss(blk.first);
+            istringstream ss(blk);
             long long a, b;
             ss >> a >> b;
-            Region* r = new Region();
-            for (long long i = a; i < b; ++i) r->push(new String(to_string(i)));
-            return {r, num};
+            auto r = new Region();
+            for(long long i = a; i < b; ++i) r->push(new String(to_string(i)));
+            return r;
         }
         else if (tok == "placeholder") {
             auto blk = consume_block(globs, raw, ctx, pos, num);
-            Value* src = ctx->get(blk.first);
-            Region* list = dynamic_cast<Region*>(src);
-            if (!list) moo_error("placeholder needs a region", ctx);
-            string temp = "/***::" + globs.create_temp() + "::***/";
+            auto src = ctx->get(blk);
+            auto list = dynamic_cast<Region*>(src);
+            if(!list) moo_error("placeholder needs a region", ctx);
+            auto temp = "/***::" + globs.create_temp() + "::***/";
             ctx->set(temp, list);
-            return {new String(temp), num};
+            return new String(temp);
         }
         else if (tok == "do") {
             ctx->token_pos = pos;
             auto blk = consume_block(globs, raw, ctx, pos, num);
             // after expanding placeholders, re‑tokenise and re‑parse
-            string expanded = blk.first;
+            string expanded = blk;
             vector<string> new_toks;
             smatch m;
             string::const_iterator searchStart(expanded.cbegin());
@@ -566,20 +561,17 @@ pair<Value*, size_t> parse_block(Globals& globs, string* raw, Context* ctx, size
             return sub;
         }
         else if (raw[pos] == "=") {
-            auto val = parse_block(globs, raw, ctx, pos+1, num);
-            ctx->set(tok, val.first);
-            return {EMPTY_STRING, num};
+            pos += 1;
+            auto val = parse_block(globs, raw, ctx, pos, num);
+            ctx->set(tok, val);
+            return EMPTY_STRING;
         }
         else if (raw[pos] == ":") {
             Context* ns = ctx->get_namespace(tok);
+            if(!ns->enabled) return EMPTY_STRING;
             pos += 1;
             skip_space(pos);
-            if (!ns->enabled) {
-                pos = num;
-                continue;
-            }
-            auto ns_res = parse_block(globs, raw, ns, pos, num);
-            return ns_res;
+            return parse_block(globs, raw, ns, pos, num);
         }
         else if (raw[pos] == "+") {
             // “+=” – only valid after a variable name and “=”
@@ -591,20 +583,20 @@ pair<Value*, size_t> parse_block(Globals& globs, string* raw, Context* ctx, size
             auto var = ctx->get(tok);
             auto val = parse_block(globs, raw, ctx, pos, num);
             if(auto* r = dynamic_cast<Region*>(var))
-                r->push(val.first);
+                r->push(val);
             else moo_error("'+=' only works on lists", ctx);
-            return {EMPTY_STRING, num};
+            return EMPTY_STRING;
         }
         else if (tok == "schedule") {
             auto val = consume_block(globs, raw, ctx, pos, num);
-            globs.schedule.push_back(val.first);
-            return {EMPTY_STRING, num};
+            globs.schedule.push_back(val);
+            return EMPTY_STRING;
         }
         else if (tok == "{") moo_error("unexpected '{", ctx);
         else moo_error("unexpected command: "+tok, ctx);
     }
     if(pos<num) moo_error("broken syntax", ctx);
-    return {EMPTY_STRING, num};
+    return EMPTY_STRING;
 }
 
 string load_file(Globals& globs, const string& filename, Context* parent) {
@@ -622,7 +614,7 @@ string load_file(Globals& globs, const string& filename, Context* parent) {
         size_t line_size = line.size();
         bool show_line_end = true;
         for (size_t i = 0; i < line_size;) {
-            if (i<line_size-4 && !in_block && line.compare(i, 4, "/**/")==0) {
+            if (i<=line_size-4 && !in_block && line.compare(i, 4, "/**/")==0) {
                 i += 4;
                 ctx->update(row, i);
                 block = line.substr(i);
@@ -640,19 +632,18 @@ string load_file(Globals& globs, const string& filename, Context* parent) {
                 ctx->tokens = raw_toks;
                 ctx->token_num = tokens.size();
                 auto val = parse_block(globs, raw_toks, ctx, 0, tokens.size());
-                out << val.first->str();
+                out << val->str();
                 block.clear();
                 show_line_end = false;
                 break;
             }
-            if (i<line_size-4 && !in_block && line.compare(i, 4, "/***")==0) {
+            if (i<=line_size-4 && !in_block && line.compare(i, 4, "/***")==0) {
                 in_block = 1;
                 i += 4;
                 ctx->update(row, i);
                 continue;
             }
-            if (i<line_size-4 && in_block==1 && line.compare(i, 4, "***/")==0) {
-                in_block = 0;
+            if (i<=line_size-4 && in_block==1 && line.compare(i, 4, "***/")==0) {
                 i += 4;
                 auto tokens = vector<string>{};
                 auto m = smatch{};
@@ -668,12 +659,18 @@ string load_file(Globals& globs, const string& filename, Context* parent) {
                 ctx->tokens = raw_toks;
                 ctx->token_num = tokens.size();
                 auto val = parse_block(globs, raw_toks, ctx, 0, tokens.size());
-                out << val.first->str();
+                out << val->str();
                 block.clear();
+                in_block = 0;
                 continue;
             }
             if(in_block) {
-                if (i<line_size-4 && line.compare(i, 4, "/***")==0) in_block++;
+                if (i<line_size-4 && line.compare(i, 4, "/***")==0) {
+                    ctx->tokens = &block;
+                    ctx->token_num = 1;
+                    ctx->token_pos = 0;
+                    moo_error("moo code block never closed", ctx);
+                }
                 if (i<line_size-4 && in_block>1 && line.compare(i, 4, "***/")==0) in_block--;
                 block += line[i];
                 ++i;

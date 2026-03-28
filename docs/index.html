@@ -209,31 +209,338 @@ p code{
 </head>
 <body>
 
+<header id="top-bar">
+    <div class="title">🐮 MOO (moolang)</div>
+    <nav class="nav">
+        <a href="#about">About</a>
+        <a href="#quickstart">Quickstart</a>
+        <div class="dropdown">
+            <a href="#docs" class="drop-btn">Documentation ▾</a>
+            <div class="drop-content">
+            <a href="#import">Import</a>
+            <a href="#variables">Vars</a>
+            <a href="#lists">Lists</a>
+            <a href="#for">For</a>
+            <a href="#patterns">Patterns</a>
+            <a href="#system">System</a>
+            <a href="#lambdas">Lambdas</a>
+            <a href="#namespaces">Namespaces</a>
+            </div>
+        </div>
+    </nav>
+</header>
+
+
+<main>
+<section id="about"><h2>⚡ About</h2>
+<p>This is a build system that inlines external configuration and files. It aims
+to reconcile its creator's three contradictory truths of software development: <br>
+- Monoliths are lightweight (no adding communication layers).<br>
+- Separation of concern is good.<br>
+- Splitting configuration from code is tedious.
+</p>
+<p><i>No configuration files! Only your code and the MOO‑NOLITH.</i></p>
+</section>
+
+<section id="quickstart"><h2>🚀 Quickstart</h2>
+<ol>
+    <li>Download <code>moo.py</code></li>
+    <li>Optionally grab the <code>scripts/</code> folder – it contains handy helpers.</li>
+    <li>Make sure you have Python 3.11 or later installed.</li>
+    <li>Run a sample file:</li>
+</ol>
+
+<pre data-filename="run-example.sh" data-copy><code class="language-c">python3 moo.py examples/hello.txt.moo</code></pre>
+<pre data-filename="hello.txt.moo" data-copy><code class="language-c">Hi!
+/**/ moo.safe += pattern {moo.python} scripts/*
+/**/ os = system {moo.python} scripts/os.py
+/**/ user = $world
+/**/ import examples/hello.{os}.txt.moo
+- Be safe out there.
+</code></pre>
+<pre data-filename="hello.linux.txt.moo" data-copy><code class="language-c">Hello /***str {user}***/ from a linux file!</code></pre>
+
+<p>Running the above on a Linux OS creates <code>examples/hello.txt</code> (the <code>.moo</code> suffix is stripped):</p>
+
+<pre data-filename="generated-hello.txt" data-copy><code class="language-c">Hi!
+Hello world from a linux file!
+- Be safe out there.</code></pre>
+</section>
+
+<section id="docs"><h2>📚 Docs</h2>
+<p id="import"><b>Import</b> a file by parsing its contents according to <i>moo</i> and then placing the
+result inline. The pattern for this is <code>import filepath</code>. If you do not want to process the file
+but directly process its contents use <code>read filepath</code> instead.
+In either case, the language fundamentally lacks the ability to harm your data other than creating
+one explicit file and adding safety exceptions in main file that cannot be expanded upon by imported
+files.</p>
+
+<p>When parsing <i>moo</i> files, instructions can be used within other material so as to generate code and perform various tasks.
+To make the instructions distinct, they reside in lines starting with <code>/**/</code>.
+Use <code>/*** code ***/</code> for multi-line blocks or inline replacement.</p>
 
 
 
+<p id="variables"><b>Variables</b> are created per <code>varname = command expression</code> and are immutable once created.
+Their name must start with a letter or underscore (_) and they can contain any such letter, number, underscore,
+or dot. Commands correspond to various means of computing values given an expression.
+The simplest one is interpretation as a string with <code>str</code> (or <code>$</code> that looks similar) 
+like so:</p>
+
+<pre data-copy><code class="language-c">/**/s = str Hi!
+/**/s</code></pre>
+
+<p>This just writes <i>Hi!</i> inside the resulting file; parsing just one variable as <i>moo</i> code
+in the second line replaces it with its string representation. All variables have such a representation.
+Setting a variable creates no text, but you can use the variable's name or simply the pattern <code>command expression</code>
+without any assignment to obtain text that is added to the file being parsed.
+</p>
+
+<p>Before expressions are processed by the command, they may resolve nested <i>moo</i> code enclosed in
+brackets. For example, the following creates a set of line-separated values <i>1,2,3</i>
+(how the range works will be shown later) and replaces both the range and a new line symbol within
+the string being parsed.</p>
+
+<pre data-copy><code class="language-c">/**/s = str This is a range of values: {moo.symbols.line} {range 1 4}
+/**/s</code></pre>
+
+<p>
+When importing files, variables are inherited from their parents. However, variables other than
+<i>moo.safe</i> can be shadowed locally with different values. Some common variables that are supplied
+by default are presented below. What being a list means is covered next:</p>
 
 
+<table border="1" cellpadding="5" cellspacing="0" class="moo-table">
+  <thead>
+    <tr>
+      <th>Variable</th>
+      <th>Details</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>moo.args</code></td>
+      <td>Extra arguments passed to the language.</td>
+    </tr>
+    <tr>
+      <td><code>moo.cwd</code></td>
+      <td>The working directory from which the language was invoked.</td>
+    </tr>
+    <tr>
+      <td><code>moo.python</code></td>
+      <td>Absolute path to the running Python interpreter.</td>
+    </tr>
+    <tr>
+      <td><code>moo.safe</code></td>
+      <td>A <code>list</code> of whitelisted command prefixes (cannot be shadowed).</td>
+    </tr>
+    <tr>
+      <td><code>moo.symbols.line</code></td>
+      <td>New‑line character <code>\n</code>.</td>
+    </tr>
+    <tr>
+      <td><code>moo.symbols.comma</code></td>
+      <td>Comma character <code>,</code>.</td>
+    </tr>
+    <tr>
+      <td><code>moo.symbols.space</code></td>
+      <td>Space character.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p id="lists"><b>Lists</b> hold an ordered collection of values created per <code>listname = list delimiter</code>.
+When a list is converted into text, for example via <code>/***listname***/</code>,
+its elements are joined using the delimiter declared upon list creation. Add an element to  a list
+per <code>listname += command expression</code>, where the commands and expressions
+are the same to what you would use for variables.</p>
+
+<p>One special list type are ranges, which are line-separated and
+created per <code>range start end</code>, where the <i>start</i> is a first integer and <i>end</i>
+the range's end (non-inclusive). For example <code>range 1 4</code> creates a range
+with elements <code>1,2,3</code>.
+
+<p>In addition to direct conversion of lists to text, there is a mechanism to set
+placeholders in the text that are declared early but filled only when all
+list elements have been determined - mainly after parsing the whole file.
+The mechanism for doing so is demonstrated below:</p>
+<pre data-filename="list-usage.c" data-copy>
+<code class="language-c">/**/ HEAD = list {moo.symbols.line}
+/**/ BODY = list {moo.symbols.line}
+&lt;head&gt;/*** {placeholder HEAD} ***/&lt;/head&gt;
+&lt;body&gt;/*** {placeholder BODY} ***/&lt;/body&gt;
+/**/ HEAD += str &lt;title&gt;My page&lt;/title&gt;
+/**/ BODY += Hello world!
+</code></pre>
+
+<p id="for"><b>For</b> statements can loop through list values.
+In particular, the syntax <code>for varname=command expression: code</code>
+sets <i>varname</i> as a loop variable that progressively assumes all elements in the list
+as values, and executes the internal code. That code can be assignments, system runs, etc.,
+but its goal can also be to yield values. This is because loop results are gathered into
+lists (empty text is skipped), as shown below:
+</p>
+<pre data-copy><code class="language-c">/**/numbers = for number=range 1 4: str - number {number}
+Here are some numbers:
+/**/numbers
+</code></pre>
+
+This yields:
+
+<pre data-copy><code class="language-c">Here are some numbers:
+- number 1
+- number 2
+- number 3</code></pre>
 
 
+<p>When creating loops, the loop variable must not exist (or you can guard it within namespaces explained later)
+and is removed afterwards. This is a convenient mechanism for also declaring temporary variables by considering
+them lists of one element, like below. Do note that command-expression pairs can be substituted by just a variable
+name:</p>
 
+<pre data-copy><code class="language-c">/**/for one=str 1: str One is {one}.
+/**/x = str 42
+/**/for value=x: str The Answer is {value}.
+</code></pre>
 
+This yields:
 
+<pre data-copy><code class="language-c">One is 1.
+The Answer is 42.</code></pre>
 
+<p id="patterns"><b>Patterns</b> are text that contains some wildcard character regions, designated
+by *. Declaring a pattern is performed per <code>pattern expression</code> where the expression.
+</p>
 
+<p>Patterns, regular text, and lists all accept a matchin operation that compares them to some
+text value. Its syntax is <code>match query: expression</code> where the query is a query expression.
+If the query is normal text, this is an exact comparison. If it is a pattern, pattern compliance is
+checked. If it is a list, matching with at least one element is checked. The result is either <code>True</code>
+or <code>False</code>.
+</p>
 
+<p>An example of pattern matching is presented below, which also demonstrates the <code>if</code> command.
+This has a similar structure to loops, with the difference that the code after the double colons
+is executed only if the checked expression is <code>True</code>.</p>
 
+<pre data-filename="list-usage.c" data-copy>
+<code class="language-c">/**/ testlist = list {moo.symbols.line}
+/**/ testlist += pattern el*
+Does the pattern match?
+/**/ if str {match testlist: element}: str matched!
+</code></pre>
 
+<p id="system"><b>System</b> commands can run with the command <code>system expression</code>. Similarly to other
+constructs, brackets inside expression are expanded into text. The <code>moo.safe</code> list
+determines allowed system commands through an internal match operation.
+Use <code>schedule expression</code> to run a system command <b>after</b>
+generatinc the output file. Scheduled commands may, for example, call build processes on the resulting file.
+</p>
 
+<p>System commands are executed concurrently in separate operating system processes; this is typically parallelized.
+They are both cached and synchronized with the rest of the code lazily, at the point when their string representations
+are needed. For example, using <code>for</code> loops to create command batches means that they are synchronized only
+when converting the loop's outcome to text. As an example, below is <i>moo</i>'s test suite that use this principle.
+</p>
 
+<pre data-filename="reuse-helper.c" data-copy>
+<code class="language-c">/**/ moo.safe += str rm tests
+/**/ moo.safe += pattern rm examples/*
+/**/ moo.safe += pattern {moo.python} moo.py examples/*
+/**/ schedule rm tests
 
+/**/ print Running tests
+/**/ system {moo.python} moo.py examples/hello.txt.moo --nocolor
+/**/ for i=range 1 8: system {moo.python} moo.py examples/file{i}.txt.moo --nocolor
 
+/**/ print Cleanup
+/**/ system rm examples/hello.txt
+/**/ for i=range 1 8: system rm examples/file{i}.txt
+</code></pre>
 
+<p id="lambdas"><b>Lambda</b> expressions can be defined to
+define a helper once and reuse it anywhere you import the file.
+The helper inherits the current whitelist.</p>
 
+<pre data-filename="reuse-helper.c" data-copy>
+<code class="language-c">/**/ moo.safe += {moo.python} scripts/
+/**/ b64 = str system {moo.python} scripts/b64.py
+Command to be run (for debugging):
+/**/ b64
+Actually run the b64 conversion:
+/**/ do {b64} examples/file1.txt.moo</code>
+</pre>
 
+<p id="namespaces"><b>Namespaces</b> let you group related statements and optionally disable the whole group at runtime.
+In particular, if the <code>enabled</code> condition evaluates to <code>False</code>, all statements in that namespace
+are ignored for the rest of the file. A disabled namespace cannot be re‑enabled later.
+</p>
+<p>In the example below, a
+</p>
 
+<pre data-filename="src/main.c.moo" data-copy>
+<code class="language-c">// src/main.c.moo
+///**/ if str {in moo.args: str --compile}: enabled COMPILE
+///**/ COMPILE: moo.safe += gcc
+///**/ COMPILE: schedule gcc -Wall -O3 -o lettuce src/main.c
 
+#include &lt;stdio.h&gt;
 
+int main() {
+printf("Hello world!\n");
+return 0;
+}</code>
+</pre>
 
+</section>
 
+    <footer>
+        © 2026 Emmanouil Krasanakis – <a href="https://github.com/maniospas/moo">GitHub</a>
+    </footer>
+</main>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script>document.querySelectorAll('pre[data-copy]').forEach(pre => {
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.textContent = 'copy';
+    btn.addEventListener('click', () => {
+        const code = pre.querySelector('code').innerText;
+        navigator.clipboard.writeText(code).then(() => {
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = 'Copy', 1500);
+        });
+    });
+    pre.appendChild(btn);
+});
+document.querySelectorAll('#top-bar a').forEach(a => {
+    a.addEventListener('click', e => {
+        e.preventDefault();
+        const target = document.querySelector(a.getAttribute('href'));
+        target.scrollIntoView({behavior:'smooth'});
+        const elementPosition = target.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - 100;
+        window.scrollTo({
+            top: offsetPosition,
+            behavior: "smooth"
+        });
+    });
+});
+document.querySelectorAll('.drop-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+        e.preventDefault();                 // keep #docs from scrolling
+        const menu = btn.nextElementSibling;
+        menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+    });
+    document.addEventListener('click', e => {
+        if (!btn.closest('.dropdown').contains(e.target)) {
+            btn.nextElementSibling.style.display = 'none';
+        }
+    });
+});
+</script>
+
+</body>
+</html>
