@@ -128,7 +128,7 @@ class Context:
     def __getitem__(self, name: str):
         existing = self.vars.get(name, None)
         if existing is None and self.parent: return self.parent[name]
-        assert existing is not None, "Variable not found: "+name
+        assert existing is not None, "variable not found: "+name
         return existing
 
 class Globals:
@@ -194,7 +194,11 @@ def consume_block(globs: Globals, tokens: list[str], context: Context, pos:int, 
     ret = ""
     while pos<num_tokens:
         token = tokens[pos]
-        if token=="{":
+        if token=="|" and not ret.strip():
+            returned, pos = parse_block(globs, tokens, context, pos+1, num_tokens)
+            context.token_pos = pos
+            ret += str(returned)
+        elif token=="{":
             if variable_expansion_only: 
                 if pos<num_tokens-2 and tokens[pos+1]!="{" and tokens[pos+2] == "}":
                     returned = context[tokens[pos+1]]
@@ -226,7 +230,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
         if isinstance(block, list): tokens = block
         else:
             block = block.replace("\n", " ").strip()
-            raw_parts = re.split(r'(\s+|:|\\+|/\*\*/|=|[{}])', block)
+            raw_parts = re.split(r'(\s+|:|\\+|/\*\*/|=|\||[{}])', block)
             tokens = [p for p in raw_parts if p != ""]
         if num_tokens is None: num_tokens = len(tokens)
         assert pos<num_tokens, "empty block\nPerhaps use pass _ to skip a moo line."
@@ -306,10 +310,10 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
             elif token=="path":
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
                 returned = str(Path(str(returned)).resolve())
-            elif token=="eval":
-                returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
-                returned = eval(returned)
-                returned = str(returned)
+            # elif token=="eval":
+            #     returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
+            #     returned = eval(returned)
+            #     returned = str(returned)
             elif token=="system":
                 prev_pos = context.token_pos
                 returned, pos = consume_block(globs, tokens, context, pos+1, num_tokens)
@@ -484,7 +488,7 @@ def parse_block(globs: Globals, block: str|list[str], context: Context, pos:int=
                     for var in context.vars:
                         if var.startswith("/***::"):
                             returned = returned.replace(var, str(context.vars[var]))
-                new_raw_parts = re.split(r'(\s+|:|\\+|/\*\*/|=|[{}])', returned.replace("\n", " ").strip())
+                new_raw_parts = re.split(r'(\s+|:|\\+|/\*\*/|=|\||[{}])', returned.replace("\n", " ").strip())
                 new_tokens = [p for p in new_raw_parts if p != ""]+tokens[pos+1:num_tokens]
                 context.token_pos = prev_pos
                 returned, _ = parse_block(globs, new_tokens, context)
@@ -569,13 +573,16 @@ if __name__ == "__main__":
     globs.log("MOO", "- version 0.5", color=GREEN)
     path = args[0]
     system_context = Context("MOO")
+    system_context["moo.run"] = str(Path(sys.executable).resolve()) if getattr(sys, "frozen", False) else f"{sys.executable} {Path(sys.argv[0]).resolve()}"
     system_context["moo.safe"] = Region()
-    system_context["moo.python"] = sys.executable
-    system_context["moo.args"] = str(args)
+    mooargs = Region()
+    for arg in args[1:]: mooargs.push(arg)
+    system_context["moo.args"] = mooargs
     system_context["moo.cwd"] = str(Path.cwd().resolve())
     system_context["moo.symbols.line"] = "\n"
     system_context["moo.symbols.space"] = " "
     system_context["moo.symbols.comma"] = ","
+    system_context["moo.python"] = "python3"
     processed = load_file(globs, path, system_context)
     if stream:
         print(processed)

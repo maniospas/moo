@@ -66,7 +66,7 @@ of these concepts:
 ```c
 // hello.txt.moo
 Hi!
-/**/ moo.safe += str {moo.python} scripts/
+/**/ moo.safe += pattern {moo.python} scripts/ *
 /**/ os = system {moo.python} scripts/os.py
 /**/ user = str maniospas
 /**/ import hello.{os}.txt.moo
