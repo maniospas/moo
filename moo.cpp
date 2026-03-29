@@ -28,6 +28,9 @@
 #include <fstream>
 #include <sstream>
 #include <filesystem>
+#include "std/base64.h"
+#include "std/base64.cpp"
+
 using namespace std;
 using filesystem::path;
 
@@ -553,6 +556,14 @@ ValuePtr parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size
             auto r = new Region();
             for(long long i = a; i < b; ++i) r->push(new String(to_string(i)));
             return ValuePtr{r};
+        }
+        else if (tok == "base64.encode") {
+            auto blk = consume_block(globs, raw, ctx, pos, num);
+            return ValuePtr(new String(base64_encode(blk)));
+        }
+        else if (tok == "base64.decode") {
+            auto blk = consume_block(globs, raw, ctx, pos, num);
+            return ValuePtr(new String(base64_decode(blk)));
         }
         else if (tok == "placeholder") {
             auto blk = consume_block(globs, raw, ctx, pos, num);
