@@ -16,14 +16,14 @@
 /***import docs/overview.html***/
 /***import docs/quickstart.html***/
 <section id="docs"><h2>📚 Docs</h2>
-/***read docs/import.html***/
-/***read docs/variables.html***/
-/***read docs/lists.html***/
-/***read docs/for.html***/
-/***read docs/patterns.html***/
-/***read docs/system.html***/
-/***read docs/lambdas.html***/
-/***read docs/namespaces.html***/
+/***file.read docs/import.html***/
+/***file.read docs/variables.html***/
+/***file.read docs/lists.html***/
+/***file.read docs/for.html***/
+/***file.read docs/patterns.html***/
+/***file.read docs/system.html***/
+/***file.read docs/lambdas.html***/
+/***file.read docs/namespaces.html***/
 </section>
 
     <footer>
@@ -34,7 +34,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
-<script>/***read docs/dynamic.js***/</script>
+<script>/***file.read docs/dynamic.js***/</script>
 
 </body>
 </html>

@@ -1,4 +1,4 @@
-///**/ schedule g++ moo -o moo -Wall -O3
+///**/ schedule g++ moo.cpp -o moo -Wall -O3
 
 // Copyright 2026 Emmanouil Krasanakis
 //
@@ -422,6 +422,11 @@ string consume_block(Globals& globs, string* toks, Context* ctx, size_t pos, siz
                 }
                 ++pos;
             }
+            if(start+2==pos && toks[start+1]=="...") {
+                auto blk = parse_block(globs, toks, ctx, pos+1, num);
+                result += blk->str();
+                break;
+            }
             auto blk = parse_block(globs, toks, ctx, start+1, pos);
             result += blk->str();
             ++pos; // skip closing '}'
@@ -487,7 +492,7 @@ ValuePtr parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size
             auto blk = consume_block(globs, raw, ctx, pos, num);
             return ValuePtr{new String{load_file(globs, blk, ctx)}};
         }
-        else if (tok == "read") {
+        else if (tok == "file.read") {
             auto blk = consume_block(globs, raw, ctx, pos, num);
             globs.log("    read", blk);
             ifstream f(blk);
@@ -495,6 +500,13 @@ ValuePtr parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size
             ostringstream ss;
             ss << f.rdbuf();
             return ValuePtr{new String(ss.str())};
+        }
+        else if (tok == "file.raw") {
+            auto blk = consume_block(globs, raw, ctx, pos, num);
+            globs.log("     raw", blk);
+            ifstream f(blk, ios::binary);
+            auto data = std::string(istreambuf_iterator<char>(f), istreambuf_iterator<char>());
+            return ValuePtr{ new String(data) };
         }
         else if (tok == "str" || tok == "$") return ValuePtr{new String(consume_block(globs, raw, ctx, pos, num))};
         else if (tok == "pattern") return ValuePtr{new Pattern(consume_block(globs, raw, ctx, pos, num))};
