@@ -40,25 +40,77 @@ constexpr size_t COMMAND_TYPE = 2;
 constexpr size_t PATTERN_TYPE = 3;
 
 class Value {
+    int references;
+protected:
+    Value(): references(0) {}
 public:
     virtual const string& str() const = 0;
     virtual const char* type() const {return "str";}
     virtual size_t type_id() const = 0;
     virtual bool match(const string& other) const {return str()==other;}
+    virtual ~Value() {}
+    friend class ValuePtr;
 };
+
+class ValuePtr {
+    Value* ptr_;
+    static void inc(Value* p) noexcept {if(p) ++p->references;}
+    static void dec(Value* p) noexcept {if(p && --p->references == 0) delete p;}
+public:
+    ValuePtr() noexcept : ptr_(nullptr) {}
+    explicit ValuePtr(Value* p) noexcept : ptr_(p) { inc(ptr_); }
+    ValuePtr(const ValuePtr& other) noexcept : ptr_(other.ptr_) { inc(ptr_); }
+    ValuePtr(ValuePtr&& other) noexcept : ptr_(other.ptr_) {other.ptr_ = nullptr;}
+    ~ValuePtr() { dec(ptr_); }
+    ValuePtr& operator=(const ValuePtr& other) noexcept {
+        if (this != &other) {
+            auto prev = ptr_;
+            ptr_ = other.ptr_;
+            inc(ptr_);
+            dec(prev);
+        }
+        return *this;
+    }
+
+    ValuePtr& operator=(ValuePtr&& other) noexcept {
+        if (this != &other) {
+            auto prev = ptr_;
+            ptr_ = other.ptr_;
+            dec(prev);
+            other.ptr_ = nullptr;
+        }
+        return *this;
+    }
+    void reset(Value* p = nullptr) noexcept {
+        if (p != ptr_) {
+            dec(ptr_);
+            ptr_ = p;
+            inc(ptr_);
+        }
+    }
+    Value* get() const noexcept { return ptr_; }
+    std::size_t use_count() const noexcept { return ptr_ ? static_cast<std::size_t>(ptr_->references) : 0; }
+    bool unique() const noexcept { return use_count() == 1; }
+    explicit operator bool() const noexcept { return ptr_ != nullptr; }
+    Value& operator*()  const { return *ptr_; }
+    Value* operator->() const { return  ptr_; }
+    friend bool operator==(const ValuePtr& a, const ValuePtr& b) noexcept { return a.ptr_ == b.ptr_; }
+    friend bool operator!=(const ValuePtr& a, const ValuePtr& b) noexcept { return a.ptr_ != b.ptr_; }
+};
+
 
 class String: public Value {
 public:
     string value;
-    explicit String(const string& value):value(value) {}
+    explicit String(const string& value): Value(), value(value) {}
     const char* type() const override {return "str";}
     const string& str() const override {return value;}
     size_t type_id() const override {return 1;}
 };
 
-String* EMPTY_STRING = new String("");
-String* TRUE_STRING = new String("True");
-String* FALSE_STRING = new String("False");
+auto EMPTY_STRING = ValuePtr{new String("")};
+auto TRUE_STRING = ValuePtr{new String("True")};
+auto FALSE_STRING = ValuePtr{new String("False")};
 class Context;
 void moo_error(const string& message, const Context* context=nullptr);
 
@@ -77,9 +129,9 @@ class Pattern : public Value {
     regex re;
     string raw;
 public:
-    explicit Pattern(const string& s) : raw(s) {
+    explicit Pattern(const string& s) : Value(), raw(s) {
         string esc;
-        for (char c : s) {
+        for(char c : s) {
             if (c == '*') esc += ".*";
             else esc += regex_escape(string(1, c));
         }
@@ -96,29 +148,29 @@ class Region: public Value {
     mutable string cached;
     mutable bool dirty = true;
 public:
-    vector<Value*> items;
-    explicit Region(const string& delim = "\n") : delimiter(delim) {}
-    void push(Value* v) { items.push_back(v); dirty = true; }
+    vector<ValuePtr> items;
+    explicit Region(const string& delim = "\n") : Value(), delimiter(delim) {}
+    void push(Value* v) { items.emplace_back(v); dirty = true; }
     const string& str() const override {
         if(!dirty) return cached;
         cached.clear();
-        for (auto* v : items) {
+        for (const auto& v : items) {
             const string& s = v->str();
-            if (!cached.empty()) cached += delimiter;
+            if(!cached.empty()) cached += delimiter;
             cached += s;
         }
         dirty = false;
         return cached;
     }
-    const char* type() const override { return "region"; }
+    const char* type() const override { return "list"; }
     size_t type_id() const override { return 4; }
     string descriptive() const {
         ostringstream out;
-        for (auto* v : items) out<<"\n     "<<CYAN<< v->type()<<RESET<<" "<<v->str();
+        for (const auto& v : items) out<<"\n     "<<CYAN<< v->type()<<RESET<<" "<<v->str();
         return out.str();
     }
     bool match(const string& value) const override {
-        for (auto* v : items) if(v->match(value)) return true;
+        for (const auto& v : items) if(v->match(value)) return true;
         return false;
     }
 };
@@ -129,7 +181,7 @@ class Command : public Value {
 public:
     string expression;
     class Context* context;
-    explicit Command(const string& expression, class Context* context) : expression(expression), context(context) {}
+    explicit Command(const string& expression, class Context* context) : Value(), expression(expression), context(context) {}
     size_t type_id() const override {return COMMAND_TYPE;}
     const string& str() const override {
         if(executed) return cached;
@@ -187,7 +239,7 @@ public:
     size_t token_pos;
     string* tokens;
     size_t token_num;
-    unordered_map<string, Value*> vars;
+    unordered_map<string, ValuePtr> vars;
     unordered_map<string, Context*> spaces;
     bool wrapper;
     Context(string path, Context* parent, bool shared_namespaces=false): 
@@ -232,7 +284,7 @@ public:
     inline Value* get_raw_item(const string& name) const {
         auto it = vars.find(name);
         if(it==vars.end()) return nullptr;
-        return it->second;
+        return it->second.get();
     }
     Value* __unsafe_get(const string& name) const {
         auto it = get_raw_item(name);
@@ -261,12 +313,11 @@ public:
             if(it->type_id()!=value->type_id()) moo_error("mismatching previous type for variable: "+name, this);
             if(value->type_id()!=COMMAND_TYPE) {if(value->str()!=it->str()) moo_error("mismatching previous value for variable: "+name, this);}
             else if(((Command*)it)->expression!=((Command*)value)->expression) moo_error("mismatching previous value for variable: "+name, this);
+            return;
         }
-        vars[name] = value;
+        vars[name] = move(ValuePtr{value});
     }
-    inline void remove(const string& name) {
-        vars.erase(name);
-    }
+    inline void remove(const string& name) {vars.erase(name);}
 };
 
 void moo_error(const string& message, const Context* context) {
@@ -318,7 +369,7 @@ void moo_error(const string& message, const Context* context) {
 }
 
 class Globals {
-    unordered_map<string, Command*> commands;
+    unordered_map<string, ValuePtr> commands;
     size_t temp_counter;
     bool log_enabled;
 public:
@@ -327,10 +378,10 @@ public:
     inline Command* command(const string& expression, Context* context) {
         log("  system", expression);
         auto it = commands.find(expression);
-        if(it!=commands.end()) return it->second;
+        if(it!=commands.end()) return (Command*)it->second.get();
         auto command = new Command(expression, context);
-        commands[expression] = command;
-        return command;
+        commands[expression] = ValuePtr{command};
+        return (Command*)command;
     }
     inline void log(string kind, string message, const char* color=nullptr) {
         if(!color) color = CYAN;
@@ -349,7 +400,7 @@ bool extract_arg(vector<string>& args, const string& name) {
 }
 
 static const regex token_regex(R"((\s+|:|\\+|/\*\*/|/|=|\$|[{}]))");
-Value* parse_block(Globals&, string*, Context*, size_t, size_t);
+ValuePtr parse_block(Globals&, string*, Context*, size_t, size_t);
 string consume_block(Globals&, string*, Context*, size_t, size_t);
 string load_file(Globals&, const string&, Context* =nullptr);
 
@@ -368,7 +419,8 @@ string consume_block(Globals& globs, string* toks, Context* ctx, size_t pos, siz
                 }
                 ++pos;
             }
-            result += parse_block(globs, toks, ctx, start+1, pos)->str();
+            auto blk = parse_block(globs, toks, ctx, start+1, pos);
+            result += blk->str();
             ++pos; // skip closing '}'
         } 
         else {
@@ -379,7 +431,7 @@ string consume_block(Globals& globs, string* toks, Context* ctx, size_t pos, siz
     return result;
 }
 
-Value* parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size_t num) {
+ValuePtr parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size_t num) {
     while(num>pos && raw[num-1].find_first_not_of(" \t\r\n") == string::npos) --num;
     if(pos >= num) moo_error("empty block", ctx);
     auto skip_space = [&](size_t& p) {while (p < num && raw[p].find_first_not_of(" \t\r\n") == string::npos) ++p;};
@@ -397,7 +449,7 @@ Value* parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size_t
     skip_space(pos);
     if(pos == num - 1) {
         ctx->token_pos = pos;
-        return ctx->get(raw[pos]);
+        return ValuePtr{ctx->get(raw[pos])};
     }
 
     while(pos < num) {
@@ -409,14 +461,14 @@ Value* parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size_t
         skip_space(pos);
         if (tok == "enabled") {
             auto blk = consume_block(globs, raw, ctx, pos, num);
-            if (blk == "True") ctx->enabled = true;
+            if(blk=="True") ctx->enabled = true;
             else if (blk == "False") ctx->enabled = false;
             else moo_error("enabled expects True/False", ctx);
             return EMPTY_STRING;
         }
         else if (tok == "path") {
             auto blk = consume_block(globs, raw, ctx, pos, num);
-            return new String(path(blk).lexically_normal().string());
+            return ValuePtr{new String(path(blk).lexically_normal().string())};
         }
         else if (tok == "system") {
             auto prev_pos = ctx->token_pos;
@@ -426,11 +478,11 @@ Value* parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size_t
             if(cmd.find("..") != string::npos) moo_error("‘..’ not allowed in system command", ctx);
             if(!safe->match(cmd))
                 moo_error("command not permitted by 'moo.safe': "+cmd+"\n  Current permissions:"+safe->descriptive(), ctx);
-            return globs.command(cmd, ctx);
+            return ValuePtr{globs.command(cmd, ctx)};
         }
         else if (tok == "import") {
             auto blk = consume_block(globs, raw, ctx, pos, num);
-            return new String{load_file(globs, blk, ctx)};
+            return ValuePtr{new String{load_file(globs, blk, ctx)}};
         }
         else if (tok == "read") {
             auto blk = consume_block(globs, raw, ctx, pos, num);
@@ -439,18 +491,19 @@ Value* parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size_t
             if(!f.is_open()) moo_error("failed to open file: "+blk, ctx);
             ostringstream ss;
             ss << f.rdbuf();
-            return new String(ss.str());
+            return ValuePtr{new String(ss.str())};
         }
-        else if (tok == "str" || tok == "$") return new String(consume_block(globs, raw, ctx, pos, num));
-        else if (tok == "pattern") return new Pattern(consume_block(globs, raw, ctx, pos, num));
+        else if (tok == "str" || tok == "$") return ValuePtr{new String(consume_block(globs, raw, ctx, pos, num))};
+        else if (tok == "pattern") return ValuePtr{new Pattern(consume_block(globs, raw, ctx, pos, num))};
         else if (tok == "print") {
             cout<<consume_block(globs, raw, ctx, pos, num)<<"\n";
             return EMPTY_STRING;
         }
         else if (tok == "if") {
             auto colon = find_next_colon(pos);
-            auto cond = parse_block(globs, raw, ctx, pos, colon)->str();
-            if(cond == "True") return parse_block(globs, raw, ctx, colon+1, num);
+            auto condition = parse_block(globs, raw, ctx, pos, colon);
+            auto cond = condition->str();
+            if(cond=="True") return parse_block(globs, raw, ctx, colon+1, num);
             else if(cond!="False") moo_error("conditions can only be True/False", ctx);
             return EMPTY_STRING;
         }
@@ -465,19 +518,19 @@ Value* parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size_t
             auto iter_blk = parse_block(globs, raw, ctx, pos, colon);
             pos = colon+1;
             auto iter_val = iter_blk;
-            auto src = dynamic_cast<Region*>(iter_val);
+            auto src = dynamic_cast<Region*>(iter_val.get());
             if(!src) {
                 src = new Region();
-                src->push(iter_val);
+                src->push(iter_val.get());
             }
             auto out = new Region();
-            for (auto* item : src->items) {
-                ctx->set(varname, item);
+            for (const auto& item : src->items) {
+                ctx->set(varname, item.get());
                 auto body = parse_block(globs, raw, ctx, pos, num);
-                out->push(body);
+                out->push(body.get());
                 ctx->remove(varname);
             }
-            return out;
+            return ValuePtr{out};
         }
         else if(tok == "match") {
             auto colon = find_next_colon(pos);
@@ -486,14 +539,11 @@ Value* parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size_t
             auto iter_val = iter_blk;
             skip_space(pos);
             auto value = consume_block(globs, raw, ctx, pos, num);
-            if(iter_val->match(value)) return TRUE_STRING;
-            return FALSE_STRING;
+            return iter_val->match(value)? TRUE_STRING: FALSE_STRING;
         }
         else if (tok == "list") {
             auto blk = consume_block(globs, raw, ctx, pos, num);
-            auto r = new Region();
-            r->push(new String(blk));
-            return r;
+            return ValuePtr{new Region(blk)};
         }
         else if (tok == "range") {
             auto blk = consume_block(globs, raw, ctx, pos, num);
@@ -502,7 +552,7 @@ Value* parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size_t
             ss >> a >> b;
             auto r = new Region();
             for(long long i = a; i < b; ++i) r->push(new String(to_string(i)));
-            return r;
+            return ValuePtr{r};
         }
         else if (tok == "placeholder") {
             auto blk = consume_block(globs, raw, ctx, pos, num);
@@ -511,7 +561,7 @@ Value* parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size_t
             if(!list) moo_error("placeholder needs a region", ctx);
             auto temp = "/***::" + globs.create_temp() + "::***/";
             ctx->set(temp, list);
-            return new String(temp);
+            return ValuePtr{new String(temp)};
         }
         else if (tok == "do") {
             ctx->token_pos = pos;
@@ -532,13 +582,12 @@ Value* parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size_t
             backup_ctx->token_num = new_toks.size();
             backup_ctx->token_pos = 0;
             backup_ctx->wrapper = true;
-            auto sub = parse_block(globs, new_tok_array, backup_ctx, 0, new_toks.size());
-            return sub;
+            return parse_block(globs, new_tok_array, backup_ctx, 0, new_toks.size());
         }
         else if (raw[pos] == "=") {
             pos += 1;
             auto val = parse_block(globs, raw, ctx, pos, num);
-            ctx->set(tok, val);
+            ctx->set(tok, val.get());
             return EMPTY_STRING;
         }
         else if (raw[pos] == ":") {
@@ -549,16 +598,20 @@ Value* parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size_t
             return parse_block(globs, raw, ns, pos, num);
         }
         else if (raw[pos] == "+") {
-            // “+=” – only valid after a variable name and “=”
+            auto prev_pos = ctx->token_pos;
             ctx->token_pos = pos;
-            if (raw[pos + 1] != "=") moo_error("expected '+='", ctx);
+            if(raw[pos + 1] != "=") moo_error("expected '+='", ctx);
             pos += 2;
             skip_space(pos);
             ctx->token_pos = pos;
             auto var = ctx->get(tok);
             auto val = parse_block(globs, raw, ctx, pos, num);
-            if(auto* r = dynamic_cast<Region*>(var))
-                r->push(val);
+            ctx->token_pos = prev_pos;
+            if(auto* r = dynamic_cast<Region*>(var)) {
+                r->push(val.get());
+                if(tok=="moo.safe" && (!ctx->parent || ctx->parent->parent) && !r->match(val->str()))
+                    moo_error("adding elements to 'moo.safe' is unsafe here; it is only allowed directly in your main file or if a pattern is already supported");
+            }
             else moo_error("'+=' only works on lists", ctx);
             return EMPTY_STRING;
         }
@@ -580,11 +633,12 @@ Value* parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size_t
                     if(raw[pos] == "/**/" && !depth) break;
                     ++pos;
                 }
-                reg->push(parse_block(globs, raw, ctx, ctx->token_pos+1, pos));
+                auto parsed = parse_block(globs, raw, ctx, ctx->token_pos+1, pos);
+                reg->push(parsed.get());
                 ctx->token_pos = pos;
             }
             if(reg->items.size()<=1) moo_error("'/**/' is allowed here only to designate the start of a list whose elements are separated by that symbol", ctx);
-            return reg;
+            return ValuePtr{reg};
         }
         else if (tok == "{") moo_error("unexpected '{", ctx);
         else moo_error("unexpected command: "+tok, ctx);
@@ -703,22 +757,38 @@ int main(int argc, char* argv[]) {
         cerr << "usage: moo.cpp [--silent] [--stream] <script>.moo [script‑args...]\n";
         return 1;
     }
+    if(!silent)
+        cout<<
+"⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣴⣦⡀⠀⠀⠀⠀⠀ ⢀⣤⣶⣄⠀⠀⠀⠀\n"
+"⠀⠀⠀⠀⠀⠀⠀⠀⢠⣿⡏⢻⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⠹⣿⡇⠀⠀⠀\n"
+"⠀⠀⠀⠀⠀⠀⠀⣴⣶⣾⣿⣷⣾⣿⣿⣿⣿⣿⣿⣿⣿⣶⣿⣷⣶⣦⡀ \n"
+"⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⡏  ⣿⣿⡏  ⣿⣿⣿⣿⣿⡇\n"
+"⠀⠀⠀⣠⣶⣧⠀⠙⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠟⠀\n"
+"⠀⢀⣼⣿⣿⣿⣷⡦⠀⢸⣿⣿⣿⠿⠿⠿⠿⠿⠿⠿⣿⣿⣿⣷⠀⠀⠀\n"
+"⢀⣾⣿⣿⣿⣿⣿⡇⠀⠉⠁⣀⣀⣠⣤⣤⣤⣤⣤⣄⣀⣀⠈⠉⠀⠀⠀\n"
+"⢸⣿⣿⣿⣿⣿⣿⡇⠀⢾⣿⣿⡿⠿⣿⣿⣿⣿⣿⡿⢿⣿⣿⣷⠀⠀⠀\n"
+"⣿⣿⣿⣿⣿⣿⣿⣿⠀⠸⣿⣿⣧⣀⣹⣿⣿⣿⣿⣀⣰⣿⣿⡟⠀⠀⠀\n"
+"⣿⣿⣿⣿⣿⣿⣿⣿⣷⡀⠈⠻⢿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠋⢀⠀⠀⠀\n"
+"⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣤⣀⣀⡈⠉⠉⠉⠉⣀⣀⣠⣴⠀⠀⠀  \n"
+"⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀\n"
+"⢸⣿⣿⣿⣿⡏⠉⠉⣿⣿⣿⣿⣿⠿⠿⠿⠿⢿⣿⣿⣿⣿⣿⠀⠀⠀⠀\n"
+"⠀⢿⣿⣿⣿⠇⠀⠀⠻⣿⣿⣿⠏⠀⠀⠀⠀   ⠿⣿⣿⣿⠇⠀\n\n";
 
     Globals globs(!silent);
-    globs.log("MOO", "- version 0.5", GREEN);
+    globs.log("MOO", "- version 0.6", GREEN);
     const string script_path = args[0];
 
     auto system_ctx = new Context("MOO", nullptr);
-    system_ctx->vars["moo.run"] = new String(string(argv[0]));
-    system_ctx->vars["moo.safe"] = new Region();
+    system_ctx->vars["moo.run"] = ValuePtr(new String(string(argv[0])));
+    system_ctx->vars["moo.safe"] = ValuePtr(new Region());
     auto args_reg = new Region();
     for(size_t i = 1; i < args.size(); ++i) args_reg->push(new String(args[i]));
-    system_ctx->vars["moo.args"] = args_reg;
-    system_ctx->vars["moo.cwd"] = new String(filesystem::current_path().string());
-    system_ctx->vars["moo.symbols.line"] = new String("\n");
-    system_ctx->vars["moo.symbols.space"] = new String(" ");
-    system_ctx->vars["moo.symbols.comma"] = new String(",");
-    system_ctx->vars["moo.python"] = new String("python3");
+    system_ctx->vars["moo.args"] = ValuePtr(args_reg);
+    system_ctx->vars["moo.cwd"] = ValuePtr(new String(filesystem::current_path().string()));
+    system_ctx->vars["moo.symbols.line"] = ValuePtr(new String("\n"));
+    system_ctx->vars["moo.symbols.space"] = ValuePtr(new String(" "));
+    system_ctx->vars["moo.symbols.comma"] = ValuePtr(new String(","));
+    system_ctx->vars["moo.python"] = ValuePtr(new String("python3"));
 
     auto processed = load_file(globs, script_path, system_ctx);
     if (stream) {
