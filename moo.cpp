@@ -569,14 +569,6 @@ ValuePtr parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size
             for(long long i = a; i < b; ++i) r->push(new String(to_string(i)));
             return ValuePtr{r};
         }
-        else if (tok == "base64.encode") {
-            auto blk = consume_block(globs, raw, ctx, pos, num);
-            return ValuePtr(new String(base64_encode(blk)));
-        }
-        else if (tok == "base64.decode") {
-            auto blk = consume_block(globs, raw, ctx, pos, num);
-            return ValuePtr(new String(base64_decode(blk)));
-        }
         else if (tok == "placeholder") {
             auto blk = consume_block(globs, raw, ctx, pos, num);
             auto src = ctx->get(blk);
@@ -664,7 +656,39 @@ ValuePtr parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size
             return ValuePtr{reg};
         }
         else if (tok == "{") moo_error("unexpected '{", ctx);
-        else moo_error("unexpected command: "+tok, ctx);
+        else if (tok.compare(0, 7, "base64.")==0) {
+            try {
+                if (tok == "base64.encode.text") {
+                    auto blk = consume_block(globs, raw, ctx, pos, num);
+                    return ValuePtr(new String(base64_encode(blk)));
+                }
+                if (tok == "base64.encode.url") {
+                    auto blk = consume_block(globs, raw, ctx, pos, num);
+                    return ValuePtr(new String(base64_encode(blk, true)));
+                }
+                if (tok == "base64.encode.pem") {
+                    auto blk = consume_block(globs, raw, ctx, pos, num);
+                    return ValuePtr(new String(base64_encode_pem(blk)));
+                }
+                if (tok == "base64.encode.mime") {
+                    auto blk = consume_block(globs, raw, ctx, pos, num);
+                    return ValuePtr(new String(base64_encode_pem(blk)));
+                }
+                if (tok == "base64.decode.text") {
+                    auto blk = consume_block(globs, raw, ctx, pos, num);
+                    return ValuePtr(new String(base64_decode(blk)));
+                }
+                if (tok == "base64.decode.any") {
+                    auto blk = consume_block(globs, raw, ctx, pos, num);
+                    return ValuePtr(new String(base64_decode(blk, true)));
+                }
+                throw runtime_error("unknown 'base64.' call");
+            }
+            catch(const runtime_error& e) {
+                moo_error(e.what(), ctx);
+            }
+        }
+        else moo_error("unknown command: "+tok, ctx);
     }
     if(pos<num) moo_error("broken syntax", ctx);
     return EMPTY_STRING;
@@ -811,6 +835,8 @@ int main(int argc, char* argv[]) {
     system_ctx->vars["moo.symbols.line"] = ValuePtr(new String("\n"));
     system_ctx->vars["moo.symbols.space"] = ValuePtr(new String(" "));
     system_ctx->vars["moo.symbols.comma"] = ValuePtr(new String(","));
+    system_ctx->vars["moo.symbols.lbracket"] = ValuePtr(new String("{"));
+    system_ctx->vars["moo.symbols.rbracket"] = ValuePtr(new String("}"));
     system_ctx->vars["moo.python"] = ValuePtr(new String("python3"));
 
     auto processed = load_file(globs, script_path, system_ctx);
@@ -820,7 +846,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
     auto dst = path(script_path).replace_extension("");
-    if(dst == path(argv[0]).lexically_normal()) moo_error(dst.string() + " is forbidden from overwriting itself");
+    //if(dst == path(argv[0]).lexically_normal()) moo_error(dst.string() + " is forbidden from overwriting itself");
     auto out = ofstream{dst};
     out<<processed;
     out.close();
