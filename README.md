@@ -26,8 +26,16 @@ Some of the things you can do:
 
 ## 📋 Changelog
 
+## MOO - nightly build 
+
+Will culminate into the next version
+
+- 
+
+
 ### MOO - 0.6 (31 March 2026)
-- Fast C++ version
+- Fast C++ implementation
+- Base64 and OS functionality without needing scripts.
 
 ### MOO - 0.5 (28 March 2026)
 - Loops

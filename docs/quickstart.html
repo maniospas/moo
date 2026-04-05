@@ -2,14 +2,18 @@
 
 Download the <i>moo</i> executable for your platform 
 from the <a href="https://github.com/maniospas/moo/releases/latest">latest release</a>.
-If something goes wrong or are not in Linux or Windows, clone the 
+If something goes wrong, or if you are not in Linux or Windows, clone the 
 <a href="https://github.com/maniospas/moo">project's repository</a>
 and run <code>g++ moo.cpp -o moo -Wall -O3</code> to produce the executable. Add the executable
 either to your working dir or to your system path.
 
 <pre data-filename="run-example.sh" data-copy><code class="language-c">./moo examples/hello.txt.moo</code></pre>
+examples/hello.txt.moo
 <pre data-filename="hello.txt.moo" data-copy><code class="language-c">/***file.read examples/hello.txt.moo***/</code></pre>
+examples/hello.linux.txt.moo
 <pre data-filename="hello.linux.txt.moo" data-copy><code class="language-c">/***file.read examples/hello.linux.txt.moo***/</code></pre>
+scripts/os.py
+<pre data-filename="hello.linux.txt.moo" data-copy><code class="language-c">/***file.read scripts/os.py***/</code></pre>
 
 <p>Running the above on a Linux OS creates <code>examples/hello.txt</code> (the <code>.moo</code> suffix is stripped):</p>
 
