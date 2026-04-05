@@ -28,7 +28,7 @@ jobs:
 
       - name: Set up MSVC command‑line tools
         if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v
+        uses: ilammy/msvc-dev-cmd@v1
 
       - name: Build on Windows (MSVC)
         if: runner.os == 'Windows'
