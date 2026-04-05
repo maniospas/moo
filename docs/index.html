@@ -244,14 +244,16 @@ to reconcile its creator's three contradictory truths of software development: <
 
 <section id="quickstart"><h2>🚀 Quickstart</h2>
 
-Download the <i>moo</i> executable for your platform 
+<p>Download the <i>moo</i> executable for your platform 
 from the <a href="https://github.com/maniospas/moo/releases/latest">latest release</a>.
 If something goes wrong, or if you are not in Linux or Windows, clone the 
 <a href="https://github.com/maniospas/moo">project's repository</a>
 and run <code>g++ moo.cpp -o moo -Wall -O3</code> to produce the executable. Add the executable
-either to your working dir or to your system path.
+either to your working dir or to your system path. Then run the next command given the following files
+(this particular build also requires Python only to demonstrate interaction with system utilities).</p>
 
 <pre data-filename="run-example.sh" data-copy><code class="language-c">./moo examples/hello.txt.moo</code></pre>
+<p><code>examples/hello.txt.moo</code></p>
 <pre data-filename="hello.txt.moo" data-copy><code class="language-c">Hi!
 /**/ moo.safe += pattern {moo.python} scripts/*
 /**/ os = system {moo.python} scripts/os.py
@@ -259,7 +261,14 @@ either to your working dir or to your system path.
 /**/ import examples/hello.{os}.txt.moo
 - Be safe out there.
 </code></pre>
+<p><code>examples/hello.linux.txt.moo</code></p>
 <pre data-filename="hello.linux.txt.moo" data-copy><code class="language-c">Hello /***str {user}***/ from a linux file!</code></pre>
+<p><code>scripts/os.py</code></p>
+<pre data-filename="scripts/os.py" data-copy><code class="language-c">import platform
+
+system = platform.system()
+print(system.lower(), end="")
+</code></pre>
 
 <p>Running the above on a Linux OS creates <code>examples/hello.txt</code> (the <code>.moo</code> suffix is stripped):</p>
 
@@ -346,6 +355,22 @@ by default are presented below. What being a list means is covered next:</p>
     <tr>
       <td><code>moo.symbols.space</code></td>
       <td>Space character.</td>
+    </tr>
+    <tr>
+      <td><code>moo.symbols.lbracket</code></td>
+      <td>Left bracket character <code>{</code>.</td>
+    </tr>
+    <tr>
+      <td><code>moo.symbols.rbracket</code></td>
+      <td>Right bracket character <code>}</code>.</td>
+    </tr>
+    <tr>
+      <td><code>moo.symbols.colon</code></td>
+      <td>Colon character <code>:</code>.</td>
+    </tr>
+    <tr>
+      <td><code>moo.symbols.pipe</code></td>
+      <td>A text representation of the pipe operator <code>{...}</code>.</td>
     </tr>
   </tbody>
 </table>
@@ -459,9 +484,9 @@ when converting the loop's outcome to text. As an example, below is <i>moo</i>'s
 /**/ for i=range 1 8: system rm examples/file{i}.txt
 </code></pre>
 
-<p id="lambdas"><b>Lambda</b> expressions can be defined to
-define a helper once and reuse it anywhere you import the file.
-The helper inherits the current whitelist.</p>
+<p id="lambdas"><b>Lambda</b> expressions are basically expression
+segments that are injected in the code later. Use the <code>do</code>
+command to run text code.</p>
 
 <pre data-filename="reuse-helper.c" data-copy>
 <code class="language-c">/**/ moo.safe += {moo.python} scripts/
@@ -471,6 +496,43 @@ Command to be run (for debugging):
 Actually run the b64 conversion:
 /**/ do {b64} examples/file1.txt.moo</code>
 </pre>
+
+<p><code>scripts/b64.py</code></p>
+<pre data-filename="scripts/b64.py" data-copy><code class="language-python">import sys
+import base64
+from pathlib import Path
+
+def encode_file(in_path: Path):
+    # Standard Base‑64 with newline every 76 characters (RFC 2045)
+    data = in_path.read_bytes()
+    return base64.encodebytes(data).decode("ascii").strip()
+
+if __name__ == "__main__":
+    argv = sys.argv[1:]
+    if len(argv) != 1:
+        sys.stderr.write(f"b64 need exactly one input: {argv}\n")
+        sys.exit(1)
+    in_path = Path(argv[0])
+    if not in_path.is_file():
+        sys.stderr.write(f"file not found: {in_path}\n")
+        sys.exit(1)
+    b64 = encode_file(in_path)
+    sys.stdout.write(b64)
+    sys.stdout.flush()
+</code></pre>
+
+<p>One helper utility is the pipeing operator <code>{...}</code>, which is used
+to place the remainder of the. You can inject this into your text using the
+<code>moo.symbols.pipe</code> symbols. </p>
+
+<p>Below is an equivalent command to the one defined above that does not use the external Python script; 
+base64 encodings are provided by <i>moo</i>, and this expression will run tens of times faster.
+Notice the use of <code>$$</code>, where the first of these repeted symbols denotes a string,
+and the second will be used to denote a string (the outcome of the encoding) when the command expands.</p>
+<pre><code class="language-c">/**/ imgtype = $data:image/png;base64,
+/**/ b64 = $${imgtype}{moo.symbols.pipe} base64.encode.text {moo.symbols.pipe} file.raw
+/**/ do {b64} examples/lettuce.png
+</code></pre>
 
 <p id="namespaces"><b>Namespaces</b> let you group related statements and optionally disable the whole group at runtime.
 In particular, if the <code>enabled</code> condition evaluates to <code>False</code>, all statements in that namespace
@@ -504,6 +566,7 @@ return 0;
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
 <script>document.querySelectorAll('pre[data-copy]').forEach(pre => {
     const btn = document.createElement('button');
     btn.className = 'copy-btn';

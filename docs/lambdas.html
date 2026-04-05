@@ -1,6 +1,6 @@
-<p id="lambdas"><b>Lambda</b> expressions can be defined to
-define a helper once and reuse it anywhere you import the file.
-The helper inherits the current whitelist.</p>
+<p id="lambdas"><b>Lambda</b> expressions are basically expression
+segments that are injected in the code later. Use the <code>do</code>
+command to run text code.</p>
 
 <pre data-filename="reuse-helper.c" data-copy>
 <code class="language-c">/**/ moo.safe += {moo.python} scripts/
@@ -10,3 +10,40 @@ Command to be run (for debugging):
 Actually run the b64 conversion:
 /**/ do {b64} examples/file1.txt.moo</code>
 </pre>
+
+<p><code>scripts/b64.py</code></p>
+<pre data-filename="scripts/b64.py" data-copy><code class="language-python">import sys
+import base64
+from pathlib import Path
+
+def encode_file(in_path: Path):
+    # Standard Base‑64 with newline every 76 characters (RFC 2045)
+    data = in_path.read_bytes()
+    return base64.encodebytes(data).decode("ascii").strip()
+
+if __name__ == "__main__":
+    argv = sys.argv[1:]
+    if len(argv) != 1:
+        sys.stderr.write(f"b64 need exactly one input: {argv}\n")
+        sys.exit(1)
+    in_path = Path(argv[0])
+    if not in_path.is_file():
+        sys.stderr.write(f"file not found: {in_path}\n")
+        sys.exit(1)
+    b64 = encode_file(in_path)
+    sys.stdout.write(b64)
+    sys.stdout.flush()
+</code></pre>
+
+<p>One helper utility is the pipeing operator <code>{...}</code>, which is used
+to place the remainder of the. You can inject this into your text using the
+<code>moo.symbols.pipe</code> symbols. </p>
+
+<p>Below is an equivalent command to the one defined above that does not use the external Python script; 
+base64 encodings are provided by <i>moo</i>, and this expression will run tens of times faster.
+Notice the use of <code>$$</code>, where the first of these repeted symbols denotes a string,
+and the second will be used to denote a string (the outcome of the encoding) when the command expands.</p>
+<pre><code class="language-c">/**/ imgtype = $data:image/png;base64,
+/**/ b64 = $${imgtype}{moo.symbols.pipe} base64.encode.text {moo.symbols.pipe} file.raw
+/**/ do {b64} examples/lettuce.png
+</code></pre>
