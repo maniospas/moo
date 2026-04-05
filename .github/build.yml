@@ -1,0 +1,87 @@
+name: Build & Release moo.cpp
+
+on:
+  push:
+    tags:
+      - 'v*'
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            artifact_name: moo-linux
+            binary_name: moo
+          - os: windows-latest
+            artifact_name: moo-windows
+            binary_name: moo.exe
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install g++ (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y g++
+
+      - name: Build on Linux (GCC)
+        if: runner.os == 'Linux'
+        run: g++ moo.cpp -Wall -O3 -o ${{ matrix.binary_name }}
+
+      - name: Build on Windows (MSVC)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: cl /O2 /MD moo.cpp /Fe:${{ matrix.binary_name }}
+
+      - name: List built files
+        run: ls -l
+
+      - name: Upload binary as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.binary_name }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download Linux binary
+        uses: actions/download-artifact@v4
+        with:
+          name: moo-linux
+          path: ./dist
+
+      - name: Download Windows binary
+        uses: actions/download-artifact@v4
+        with:
+          name: moo-windows
+          path: ./dist
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: 🐮 MOO - ${{ github.ref_name }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
+      - name: Upload Linux binary to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./dist/moo
+          tag_name: ${{ github.ref_name }}
+
+      - name: Upload Windows binary to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./dist/moo.exe
+          tag_name: ${{ github.ref_name }}
