@@ -22,10 +22,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install g++ (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y g++
-
       - name: Build on Linux (GCC)
         if: runner.os == 'Linux'
         run: g++ moo.cpp -Wall -O3 -o ${{ matrix.binary_name }}
@@ -33,6 +29,7 @@ jobs:
       - name: Build on Windows (MSVC)
         if: runner.os == 'Windows'
         shell: cmd
+        uses: ilammy/msvc-dev-cmd@v1
         run: cl /O2 /MD moo.cpp /Fe:${{ matrix.binary_name }}
 
       - name: Run tests (Linux)
