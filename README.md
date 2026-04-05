@@ -8,11 +8,11 @@ separation of concerns is great,
 and splitting configuration from code is pesky.
 
 Thus you can use *moo*; a tiny build system that inlines
-external configurations as well as allowing packaging
-components into one file and avoid stuff like tens of API calls
-for loading a web page or platform-dependent compilation macros.
+external configurations. It also allows packaging
+components into one file to avoid tens of API calls
+for loading a web page or platform-dependent macros.
 
-Some of the things you can do by inlining some moo code in your files:
+Some of the things you can do:
 
 - Create base64 images encodings and embed them in web pages.
 - Declare a virtual environment for your Python project within its main file and "run" that file without setup.
@@ -22,11 +22,14 @@ Some of the things you can do by inlining some moo code in your files:
 
 **Requirements:** Python 3.11 or later (no virtual environment or dependencies needed)<br>
 **Author:** Emmanouil Krasanakis (maniospas@hotmail.com)<br>
-**License:** Apache 2.0<br>
+**License:** Apache 2.0 for `moo.cpp`, individual licenses for third-party files in `std/`<br>
 
 ## 📋 Changelog
 
-### MOO - 0.5 (nightly build)
+### MOO - 0.6 (31 March 2026)
+- Fast C++ version
+
+### MOO - 0.5 (28 March 2026)
 - Loops
 - Conditions
 - Patterns
@@ -89,7 +92,6 @@ Hi!
 Hello world from a linux file!
 - Be safe out there.
 ```
-
 
 ## ⚡ Documentation
 

@@ -1,4 +1,5 @@
 ///**/ schedule g++ moo.cpp -o moo -Wall -O3
+///**/ ...
 
 // Copyright 2026 Emmanouil Krasanakis
 //
@@ -297,6 +298,7 @@ public:
     }
     Value* get(const string& name) const {
         if(wrapper) return parent->get(name);
+        if(name=="...") moo_error("wrong place to use '...'\nThis is often used to denote pipe continuation in 'print file contents {...} file.read {path}' or as the only moo command to designate the rest of the parsed document as raw text.", this);
         if(name=="moo.log") {
             auto ss = ostringstream{};
             for(const auto& [var, val] : vars) ss<<"/**/ "<<var<<" = "<<val->type()<<" "<<val->str()<<"\n";
@@ -311,6 +313,7 @@ public:
         if(!value) return;
         if(name=="moo.log") moo_error("cannot overwrite moo.log", this);
         if(name=="moo.safe") moo_error("cannot shadow moo.log", this);
+        if(name.find("..")!=string::npos) moo_error("cannot have consequtive '..' in a variable name: "+name, this);
         auto it = get_raw_item(name);
         if(it) {
             if(it->type_id()!=value->type_id()) moo_error("mismatching previous type for variable: "+name, this);
@@ -656,33 +659,16 @@ ValuePtr parse_block(Globals& globs, string* raw, Context* ctx, size_t pos, size
             return ValuePtr{reg};
         }
         else if (tok == "{") moo_error("unexpected '{", ctx);
-        else if (tok.compare(0, 7, "base64.")==0) {
+        else if (tok.compare(0, 6, "base64")==0) {
             try {
-                if (tok == "base64.encode.text") {
-                    auto blk = consume_block(globs, raw, ctx, pos, num);
-                    return ValuePtr(new String(base64_encode(blk)));
-                }
-                if (tok == "base64.encode.url") {
-                    auto blk = consume_block(globs, raw, ctx, pos, num);
-                    return ValuePtr(new String(base64_encode(blk, true)));
-                }
-                if (tok == "base64.encode.pem") {
-                    auto blk = consume_block(globs, raw, ctx, pos, num);
-                    return ValuePtr(new String(base64_encode_pem(blk)));
-                }
-                if (tok == "base64.encode.mime") {
-                    auto blk = consume_block(globs, raw, ctx, pos, num);
-                    return ValuePtr(new String(base64_encode_pem(blk)));
-                }
-                if (tok == "base64.decode.text") {
-                    auto blk = consume_block(globs, raw, ctx, pos, num);
-                    return ValuePtr(new String(base64_decode(blk)));
-                }
-                if (tok == "base64.decode.any") {
-                    auto blk = consume_block(globs, raw, ctx, pos, num);
-                    return ValuePtr(new String(base64_decode(blk, true)));
-                }
-                throw runtime_error("unknown 'base64.' call");
+                auto blk = consume_block(globs, raw, ctx, pos, num);
+                if (tok == "base64.encode.text") return ValuePtr(new String(base64_encode(blk)));
+                if (tok == "base64.encode.url") return ValuePtr(new String(base64_encode(blk, true)));
+                if (tok == "base64.encode.pem") return ValuePtr(new String(base64_encode_pem(blk)));
+                if (tok == "base64.encode.mime") return ValuePtr(new String(base64_encode_pem(blk)));
+                if (tok == "base64.decode.text") return ValuePtr(new String(base64_decode(blk)));
+                if (tok == "base64.decode.any") return ValuePtr(new String(base64_decode(blk, true)));
+                throw runtime_error("unknown 'base64' command: "+tok+"\nPerhaps you meant one of:\nbase64.encode.text\nbase64.encode.url\nbase64.encode.pem\nbase64.encode.mime\nbase64.decode.text\nbase64.decode.any");
             }
             catch(const runtime_error& e) {
                 moo_error(e.what(), ctx);
@@ -837,6 +823,8 @@ int main(int argc, char* argv[]) {
     system_ctx->vars["moo.symbols.comma"] = ValuePtr(new String(","));
     system_ctx->vars["moo.symbols.lbracket"] = ValuePtr(new String("{"));
     system_ctx->vars["moo.symbols.rbracket"] = ValuePtr(new String("}"));
+    system_ctx->vars["moo.symbols.pipe"] = ValuePtr(new String("{...}"));
+    system_ctx->vars["moo.symbols.colon"] = ValuePtr(new String(":"));
     system_ctx->vars["moo.python"] = ValuePtr(new String("python3"));
 
     auto processed = load_file(globs, script_path, system_ctx);
