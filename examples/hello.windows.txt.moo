@@ -1,0 +1,1 @@
+Hello /***str {user}***/ from a windows file!
