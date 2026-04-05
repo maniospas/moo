@@ -35,8 +35,17 @@ jobs:
         shell: cmd
         run: cl /O2 /MD moo.cpp /Fe:${{ matrix.binary_name }}
 
-      - name: List built files
-        run: ls -l
+      - name: Run tests (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          chmod +x ${{ matrix.binary_name }}
+          ./${{ matrix.binary_name }} tests.moo
+
+      - name: Run tests (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          ${{ matrix.binary_name }} tests.moo
 
       - name: Upload binary as artifact
         uses: actions/upload-artifact@v4
