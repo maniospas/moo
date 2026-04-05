@@ -41,8 +41,8 @@ Some of the things you can do:
 
 ## 🚀 Quickstart
 
-Install Python 3.11 or later and download *moo.py*. You can optionally get
-some useful *scripts/* too.
+Download an executable from the latest release, or clone this repository and 
+run `g++ moo.cpp -o moo -Wall -O3` to produce that executable.
 
 You can also install the *moolang* VSCODE extension to highlight *moo* files.
 Alternate between the programming language in which you embed instructions and
